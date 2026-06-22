@@ -1,0 +1,6 @@
+{
+  "name": "Map Analyzer",
+  "description": "Extract map links, distance calculation, geocoding and data syncing.",
+  "requestFramePermissions": ["geolocation", "camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

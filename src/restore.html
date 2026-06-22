@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Survey Channel App</title>
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"><\/script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+    .loader { border: 2px solid #6366f1; border-bottom-color: transparent; border-radius: 50%; display: inline-block; box-sizing: border-box; animation: rotation 1s linear infinite; }
+    @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    
+    /* Simulate React Table Style */
+    .card { background: white; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body class="text-slate-800 p-2 sm:p-6 pb-20">
+
+  <!-- Main View -->
+  <div id="mainView" class="max-w-7xl mx-auto space-y-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pt-4 px-2">
+      <div>
+        <h2 class="text-2xl font-bold tracking-tight text-slate-800">Survey Channel</h2>
+        <p class="text-sm text-slate-500">Kelola dan input data survey channel toko partner</p>
+      </div>
+      <button id="mainAddBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition-colors flex items-center justify-center gap-2">
+        <i class="fa-solid fa-plus"></i> Tambah Data Survey
+      </button>
+    </div>
+
+    <!-- Target Table -->
+    <div class="card overflow-hidden">
+      <div class="p-4 sm:p-6 border-b border-slate-200">
+        <div class="flex items-center gap-2">
+          <div class="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+            <i class="fa-solid fa-bullseye"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-800">Target Survey</h3>
+            <p class="text-sm text-slate-500">Pencapaian target bulan ini</p>
+          </div>
+        </div>
+      </div>
+      <div class="w-full overflow-x-auto">
+        <table class="w-full text-[10px] sm:text-sm text-left">
+          <thead class="text-[10px] sm:text-xs text-slate-500 uppercase bg-slate-50 border-b">
+            <tr>
+              <th class="px-2 sm:px-4 py-2 sm:py-3 font-medium">Nama Sales</th>
+              <th class="px-2 sm:px-4 py-2 sm:py-3 font-medium text-center">Target</th>
+              <th class="px-2 sm:px-4 py-2 sm:py-3 font-medium text-center">Actual</th>
+              <th class="px-2 sm:px-4 py-2 sm:py-3 font-medium text-center">%</th>
+              <th class="px-2 sm:px-4 py-2 sm:py-3 font-medium text-center"><span class="text-emerald-600">R</span> / <span class="text-rose-600">P</span></th>
+            </tr>
+          </thead>
+          <tbody id="targetTableBody" class="divide-y divide-slate-100">
+             <tr><td colspan="5" class="text-center py-6"><span class="loader w-6 h-6 border-emerald-500"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Survey List table -->
+    <div class="card overflow-hidden">
+      <div class="p-4 sm:p-6 border-b border-slate-200">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-2">
+            <div class="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+              <i class="fa-solid fa-clipboard-list"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-slate-800">Data Survey</h3>
+              <p class="text-sm text-slate-500">Daftar toko yang telah disurvey</p>
+            </div>
+          </div>
+          <div class="relative w-full sm:max-w-xs">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input type="text" id="searchInput" class="w-full pl-9 pr-4 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Cari nama toko, cabang, sales...">
+          </div>
+        </div>
+      </div>
+      
+      <div class="w-full overflow-x-auto">
+        <table class="w-full text-sm text-left whitespace-nowrap">
+          <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+            <tr>
+              <th class="px-4 py-3 font-medium">Toko / Alamat</th>
+              <th class="px-4 py-3 font-medium">Area</th>
+              <th class="px-4 py-3 font-medium">Sales / PIC</th>
+              <th class="px-4 py-3 font-medium">Omset LCD</th>
+              <th class="px-4 py-3 font-medium">Omset Batrai</th>
+              <th class="px-4 py-3 font-medium">Foto & Lokasi</th>
+              <th class="px-4 py-3 font-medium">Stok</th>
+              <th class="px-4 py-3 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody id="surveyTableBody" class="divide-y divide-slate-100">
+            <tr><td colspan="8" class="text-center py-10"><span class="loader w-8 h-8 mx-auto mb-2 text-indigo-500 block"></span> Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form View (Matches React Form exactly) -->
+  <div id="formView" class="hidden max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100">
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white relative z-10">
+      <div>
+        <h2 id="formTitle" class="text-xl font-black text-slate-800 tracking-tight">Tambah Data Survey</h2>
+        <p id="formSubtitle" class="text-xs font-medium text-slate-500 mt-0.5">Silakan lengkapi data survey toko</p>
+      </div>
+      <button id="backBtn" class="text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 p-2 rounded-full transition-colors">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+    </div>
+
+    <form id="surveyForm" class="p-6 space-y-8">
+      
+      <!-- Informasi Dasar -->
+      <div class="space-y-4">
+         <div class="flex items-center justify-between mb-2">
+            <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">Informasi Dasar</h3>
+            <button type="button" id="testFillBtn" class="px-3 py-1 rounded border border-indigo-200 text-indigo-600 hover:bg-indigo-50 text-[10px] font-bold uppercase transition-colors">Test Isi Otomatis</button>
+         </div>
+         <div id="dasarContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-wrap">
+            <div class="space-y-1.5 w-full">
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Kecamatan <span class="text-rose-500">*</span></label>
+              <input type="text" id="fm_kecamatan" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" required>
+            </div>
+            <div class="space-y-1.5 w-full">
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Cabang <span class="text-rose-500">*</span></label>
+              <input type="text" id="fm_cabang" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" required>
+            </div>
+            <div class="space-y-1.5 w-full sm:col-span-2">
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Nama Toko <span class="text-rose-500">*</span></label>
+              <input type="text" id="fm_nama" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" required>
+            </div>
+            <div class="space-y-1.5 w-full">
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Nama Sales <span class="text-rose-500">*</span></label>
+              <select id="fm_sales" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" required></select>
+            </div>
+            <div class="space-y-1.5 w-full">
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider">CP <span class="text-rose-500">*</span></label>
+              <input type="text" id="fm_pj" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" required>
+            </div>
+            <div class="space-y-1.5 w-full">
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider">No Telepon <span class="text-rose-500">*</span></label>
+              <input type="tel" id="fm_telp" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all" required>
+            </div>
+         </div>
+      </div>
+
+      <!-- Lokasi & Foto -->
+      <div class="space-y-4 pt-4 border-t border-slate-100">
+        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em]">Lokasi & Foto</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+           <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <div class="flex justify-between items-center mb-2">
+                 <h3 class="text-[10px] sm:text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                   <i class="fa-solid fa-map-pin text-indigo-500"></i> Koordinat GPS <span class="text-rose-500">*</span>
+                 </h3>
+                 <button type="button" id="getLocBtn" class="bg-white border text-[10px] font-bold border-slate-300 text-slate-700 hover:bg-slate-100 px-3 py-1.5 rounded flex items-center gap-1 transition-colors">
+                   <i class="fa-solid fa-rotate"></i> Refresh
+                 </button>
+              </div>
+              <div class="text-sm text-slate-600 border p-3 rounded-lg bg-white shadow-inner">
+                 <div class="flex items-center justify-between gap-2 mb-1">
+                   <span class="block font-semibold">Alamat Terdeteksi:</span>
+                   <span id="locText" class="text-[10px] text-slate-400 font-mono">Belum ditemukan</span>
+                 </div>
+                 <textarea id="fm_alamat" rows="2" class="w-full text-sm border-none bg-transparent resize-none p-0 focus:outline-none" placeholder="Otomatis terisi via GPS atau ketik manual..." required></textarea>
+                 <input type="hidden" id="fm_lat"><input type="hidden" id="fm_lng">
+              </div>
+           </div>
+           
+           <div class="space-y-1.5">
+             <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1"><i class="fa-solid fa-camera text-rose-500"></i> Foto Toko <span class="text-rose-500">*</span></label>
+             <div id="fotoCaptureBox" class="w-full h-32 border-2 border-dashed border-slate-200 rounded-xl flex flex-col justify-center items-center gap-2 cursor-pointer hover:bg-slate-50 transition-all hover:border-indigo-300 group bg-slate-50/50">
+                <div class="w-10 h-10 bg-slate-100 group-hover:bg-indigo-100 rounded-lg flex items-center justify-center transition-colors">
+                   <i class="fa-solid fa-camera text-lg text-slate-400 group-hover:text-indigo-600"></i>
+                </div>
+                <span class="text-[10px] font-black text-slate-400 group-hover:text-indigo-600 uppercase tracking-widest">Buka Kamera</span>
+             </div>
+             <div id="fotoPreviewBox" class="hidden relative w-full aspect-video rounded-xl overflow-hidden shadow-sm border border-slate-100 bg-slate-50 ring-1 ring-slate-100">
+                <img id="formImgPreview" class="w-full h-full object-cover">
+                <button type="button" id="clearFotoBtn" class="absolute top-2 right-2 bg-white/90 text-rose-500 p-2 rounded-full shadow hover:bg-rose-500 hover:text-white transition-all backdrop-blur-sm"><i class="fa-solid fa-xmark"></i></button>
+             </div>
+             <input type="file" id="fotoInput" accept="image/*" capture class="hidden">
+           </div>
+        </div>
+      </div>
+
+      <!-- Produk Information -->
+      <div class="space-y-6 pt-6 border-t border-slate-100">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+           <!-- LCD -->
+           <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <i class="fa-solid fa-box text-indigo-500"></i> Informasi Produk LCD
+                </h3>
+                <button type="button" id="addLcdBtn" class="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-tight flex items-center gap-1 border border-indigo-100 text-indigo-600 hover:bg-indigo-50 transition-colors">
+                  <i class="fa-solid fa-plus"></i> Tambah Brand
+                </button>
+              </div>
+              <div id="lcdOmsetContainer" class="flex flex-wrap -mx-1.5"></div>
+              <div id="lcdItemsContainer" class="space-y-3"></div>
+           </div>
+           
+           <!-- Baterai -->
+           <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-sm font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <i class="fa-solid fa-box text-emerald-500"></i> Informasi Produk Baterai
+                </h3>
+                <button type="button" id="addBatraiBtn" class="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-tight flex items-center gap-1 border border-emerald-100 text-emerald-600 hover:bg-emerald-50 transition-colors">
+                  <i class="fa-solid fa-plus"></i> Tambah Brand
+                </button>
+              </div>
+              <div id="batraiOmsetContainer" class="flex flex-wrap -mx-1.5"></div>
+              <div id="batraiItemsContainer" class="space-y-3"></div>
+           </div>
+        </div>
+      </div>
+      
+      <!-- Additional Info -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-slate-100">
+         <div class="space-y-1.5 w-full">
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Status Regist <span class="text-rose-500">*</span></label>
+            <select id="fm_regist" class="w-full px-4 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" required>
+              <option value="">Pilih...</option><option value="Sudah Regist">Sudah Regist</option><option value="Belum Regist">Belum Regist</option>
+            </select>
+         </div>
+         <div class="space-y-1.5 w-full">
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Support <span class="text-rose-500">*</span></label>
+            <select id="fm_support" class="w-full px-4 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" required>
+               <option value="Tidak">Tidak</option><option value="Ya">Ya</option>
+            </select>
+         </div>
+         <div class="space-y-1.5 w-full">
+            <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1.5">Ketersediaan Stok <span class="text-rose-500">*</span></label>
+            <select id="fm_stok" class="w-full px-4 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold text-slate-700 focus:border-indigo-500 outline-none transition-all" required>
+               <option value="">Pilih...</option><option value="Stok LCD Saja">Stok LCD Saja</option><option value="Stok Batrai Saja">Stok Batrai Saja</option><option value="Ada Keduanya">Ada Keduanya</option><option value="Tidak Ada Keduanya">Tidak Ada Keduanya</option>
+            </select>
+         </div>
+      </div>
+
+      <div class="flex gap-3 pt-8">
+         <button type="button" id="cancelFormBtn" class="flex-1 font-bold rounded-xl text-slate-500 hover:bg-slate-50 py-3 transition-all">BATAL</button>
+         <button type="submit" id="saveFormBtn" disabled class="flex-[2] rounded-xl font-black uppercase tracking-widest bg-slate-200 text-slate-400 cursor-not-allowed shadow-none py-3 transition-all flex justify-center items-center gap-2">
+            <i class="fa-solid fa-save"></i> SIMPAN DATA SURVEY
+         </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Modal Foto View -->
+  <div id="photoModal" class="fixed inset-0 z-[100] bg-black/80 hidden items-center justify-center p-4 backdrop-blur-sm">
+      <div class="relative w-full max-w-4xl max-h-[90vh] flex flex-col items-center">
+         <button id="closePhotoModal" class="absolute -top-10 right-0 p-2 text-white/70 hover:text-white bg-black/50 rounded-full"><i class="fa-solid fa-xmark text-xl"></i></button>
+         <img id="enlargedPhoto" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain bg-slate-900">
+      </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://xorjszwbfnevvplzogti.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvcmpzendiZm5ldnZwbHpvZ3RpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyODU0MzQsImV4cCI6MjA5Mzg2MTQzNH0.s8HSxURmdyAq9DO7SUfZZHbUaUeoHsFh5aMlfEkH3kA';
+    let surveys = [];
+    let salesmen = [];
+    let salesTargets = [];
+    let photoBase64 = '';
+    let editId = null;
+    let formFields = [];
+    let dynamicData = {};
+    let lcdItems = [{brand: '', harga: ''}];
+    let batraiItems = [{brand: '', harga: ''}];
+    
+    async function init() {
+       setupListeners();
+       await fetchFormConfig();
+       await fetchSalesmen();
+       await fetchTargets();
+       await fetchSurveys();
+       renderLcdItems();
+       renderBatraiItems();
+    }
+    
+    async function fetchFormConfig() {
+       try {
+           const res = await fetch(\`\${SUPABASE_URL}/rest/v1/form_configs?select=fields_config&form_id=eq.survey_channel\`, {
+               headers: { 'apikey': SUPABASE_KEY, 'Authorization': \`Bearer \${SUPABASE_KEY}\` }
+           });
+           if (res.ok) {
+               const data = await res.json();
+               if (data && data.length > 0 && data[0].fields_config) {
+                   formFields = data[0].fields_config;
+               }
+           }
+       } catch (err) { console.error(err); }
+       renderOmsetAndOrderFields();
+    }
+
+    function getFieldConf(name, defaultLabel, defaultPlaceholder, defaultWidth) {
+        const f = formFields.find(x => x.name === name);
+        if (!f) return { label: defaultLabel, placeholder: defaultPlaceholder, widthClass: defaultWidth === 'full' ? 'w-full' : 'w-full sm:w-1/2' };
+        return {
+            label: f.label || defaultLabel,
+            placeholder: f.placeholder || defaultPlaceholder,
+            widthClass: f.width === 'full' ? 'w-full' : 'w-full sm:w-1/2'
+        };
+    }
+
+    function renderOmsetAndOrderFields() {
+        const fOmsetLcd = getFieldConf('total_omset_lcd', 'Est. Omset LCD', '0', 'half');
+        const fDariLcd = getFieldConf('order_lcd_dari', 'Order Dari', 'Pihak lain?', 'half');
+        document.getElementById('lcdOmsetContainer').innerHTML = \`
+            <div class="\${fOmsetLcd.widthClass} px-1.5 mb-3">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">\${fOmsetLcd.label} <span class="text-rose-500">*</span></label>
+                <input type="number" id="fm_lcd_omset" class="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-black text-indigo-600 outline-none transition-all" value="0" required>
+            </div>
+            <div class="\${fDariLcd.widthClass} px-1.5 mb-3">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">\${fDariLcd.label} <span class="text-rose-500">*</span></label>
+                <input type="text" id="fm_lcd_dari" class="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none transition-all" placeholder="\${fDariLcd.placeholder}" required>
+            </div>
+        \`;
+        
+        const fOmsetBatrai = getFieldConf('total_omset_batrai', 'Est. Omset Baterai', '0', 'half');
+        const fDariBatrai = getFieldConf('order_batrai_dari', 'Order Dari', 'Pihak lain?', 'half');
+        document.getElementById('batraiOmsetContainer').innerHTML = \`
+            <div class="\${fOmsetBatrai.widthClass} px-1.5 mb-3">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">\${fOmsetBatrai.label} <span class="text-rose-500">*</span></label>
+                <input type="number" id="fm_batrai_omset" class="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-black text-emerald-600 outline-none transition-all" value="0" required>
+            </div>
+            <div class="\${fDariBatrai.widthClass} px-1.5 mb-3">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1.5">\${fDariBatrai.label} <span class="text-rose-500">*</span></label>
+                <input type="text" id="fm_batrai_dari" class="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none transition-all" placeholder="\${fDariBatrai.placeholder}" required>
+            </div>
+        \`;
+        
+        if (document.getElementById('fm_lcd_omset')) document.getElementById('fm_lcd_omset').addEventListener('input', () => { if (window.checkFormValidity) window.checkFormValidity(); });
+        if (document.getElementById('fm_lcd_dari')) document.getElementById('fm_lcd_dari').addEventListener('input', () => { if (window.checkFormValidity) window.checkFormValidity(); });
+        if (document.getElementById('fm_batrai_omset')) document.getElementById('fm_batrai_omset').addEventListener('input', () => { if (window.checkFormValidity) window.checkFormValidity(); });
+        if (document.getElementById('fm_batrai_dari')) document.getElementById('fm_batrai_dari').addEventListener('input', () => { if (window.checkFormValidity) window.checkFormValidity(); });
+    }
+    
+    function buildDynamicFormInputs() {
+       if (formFields.length === 0) return; // Keep default fallback
+       
+       const container = document.getElementById('dasarContainer');
+       const excludeNames = ['total_omset_lcd', 'order_lcd_dari', 'total_omset_batrai', 'order_batrai_dari', 'status_regist', 'butuh_support', 'ada_stok_lcd_batrai', 'alamat_toko', 'lcd_brand', 'lcd_harga', 'batrai_brand', 'batrai_harga'];
+       const fields = formFields.filter(f => !excludeNames.includes(f.name)).sort((a,b) => a.order - b.order);
+       
+       let html = '';
+       fields.forEach(f => {
+           let widthClass = f.width === 'half' ? 'w-full sm:w-1/2' : 'w-full';
+           
+           let inputHtml = '';
+           if (f.name === 'salesman_name') {
+               let opts = '<option value="" disabled selected>' + (f.placeholder || 'Pilih...') + '</option>';
+               salesmen.forEach(s => opts += \`<option value="\${s.salesman_name}">\${s.salesman_name}</option>\`);
+               inputHtml = \`<select id="dyn_\${f.name}" required onchange="dynamicData['\${f.name}'] = this.value" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none">\${opts}</select>\`;
+           } else if (f.type === 'select') {
+               let opts = '<option value="" disabled selected>' + (f.placeholder || 'Pilih...') + '</option>';
+               (f.options || []).forEach(o => opts += \`<option value="\${o}">\${o}</option>\`);
+               inputHtml = \`<select id="dyn_\${f.name}" \${f.required ? 'required' : ''} onchange="dynamicData['\${f.name}'] = this.value" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none">\${opts}</select>\`;
+           } else if (f.type === 'textarea') {
+               inputHtml = \`<textarea id="dyn_\${f.name}" \${f.required ? 'required' : ''} rows="2" placeholder="\${f.placeholder}" oninput="dynamicData['\${f.name}'] = this.value" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none resize-none"></textarea>\`;
+           } else {
+               inputHtml = \`<input type="\${f.type}" id="dyn_\${f.name}" \${f.required ? 'required' : ''} placeholder="\${f.placeholder}" oninput="dynamicData['\${f.name}'] = this.value" class="w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none">\`;
+           }
+           
+           html += \`<div class="space-y-1.5 px-2 mb-4 shrink-0 \${widthClass}">
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider">\${f.label} \${f.required ? '<span class="text-rose-500">*</span>' : ''}</label>
+              \${inputHtml}
+           </div>\`;
+       });
+       container.innerHTML = html;
+       container.classList.remove('grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-4');
+       container.classList.add('flex', 'flex-wrap', '-mx-2');
+    }
+
+    async function fetchTargets() {
+        try {
+            const res = await fetch(\`\${SUPABASE_URL}/rest/v1/sales_survey_targets?select=salesman_name,target_value\`, {
+                headers: { 'apikey': SUPABASE_KEY, 'Authorization': \`Bearer \${SUPABASE_KEY}\` }
+            });
+            if (res.ok) {
+                salesTargets = await res.json();
+            }
+        } catch (err) { console.error('Error fetching targets', err); }
+    }
+
+    async function fetchSalesmen() {
+       try {
+           const res = await fetch(\`\${SUPABASE_URL}/rest/v1/salesman_customer?select=salesman_name\`, {
+               headers: { 'apikey': SUPABASE_KEY, 'Authorization': \`Bearer \${SUPABASE_KEY}\` }
+           });
+           if (res.ok) {
+               const data = await res.json();
+               const unique = [...new Set((data || []).map(s => s.salesman_name).filter(Boolean))];
+               salesmen = unique.map(name => ({ salesman_name: name }));
+               const sel = document.getElementById('fm_sales');
+               unique.forEach(s => sel.insertAdjacentHTML('beforeend', \`<option value="\${s}">\${s}</option>\`));
+           }
+       } catch (err) { console.error('Error fetching sales', err); }
+    }
+
+    async function fetchSurveys() {
+       try {
+           let all = []; let page = 0; let hasMore = true;
+           while(hasMore) {
+               const res = await fetch(\`\${SUPABASE_URL}/rest/v1/survey_channel?select=id,created_at,nama_toko,kecamatan,cabang,salesman_name,total_omset_lcd,total_omset_batrai,foto_toko,status_validation,latitude,longitude,ada_stok_lcd_batrai,status_regist,alamat_toko,no_telepon,butuh_support,order_lcd_dari,order_batrai_dari,pengambil_keputusan,data_lcd,data_batrai,extra_data&order=created_at.desc\`, {
+                  headers: { 
+                     'apikey': SUPABASE_KEY, 'Authorization': \`Bearer \${SUPABASE_KEY}\`,
+                     'Range': \`\${page*1000}-\${(page+1)*1000-1}\`
+                  }
+               });
+               if (!res.ok) break;
+               const d = await res.json();
+               all = all.concat(d);
+               if (d.length < 1000) hasMore = false; else page++;
+           }
+            surveys = all;
+           renderTable();
+           renderTargetTable();
+       } catch (err) {
+           console.error('Fetch error:', err);
+           document.getElementById('surveyTableBody').innerHTML = '<tr><td colspan="7" class="text-center py-5 text-rose-500">Gagal memuat data</td></tr>';
+       }
+    }
+
+    function renderTargetTable() {
+        const tbody = document.getElementById('targetTableBody');
+        if (salesmen.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-slate-500">Tidak ada data salesman</td></tr>';
+            return;
+        }
+
+        const targetData = salesmen.map(sales => {
+            const dbTarget = salesTargets.find(t => t.salesman_name === sales.salesman_name)?.target_value || 0;
+            const actual = surveys.filter(s => s.salesman_name === sales.salesman_name && s.status_validation !== 'Rejected').length;
+            const achieve = dbTarget > 0 ? ((actual / dbTarget) * 100).toFixed(1) : '0.0';
+            let reward = 0;
+            if (dbTarget > 0) {
+              if (actual < dbTarget) reward = -80000;
+              else if (actual === dbTarget) reward = actual * 10000;
+              else reward = (dbTarget * 10000) + ((actual - dbTarget) * 20000);
+            }
+            return { salesman_name: sales.salesman_name, actual, target: dbTarget, achieve, reward };
+        }).filter(data => data.actual > 0 || data.target > 0).sort((a, b) => b.actual - a.actual);
+
+        if (targetData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-slate-500">Belum ada data target sales.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        targetData.forEach(item => {
+            html += \`
+                <tr class="border-b hover:bg-slate-50">
+                    <td class="px-2 sm:px-4 py-2 sm:py-3 font-medium text-slate-900">\${item.salesman_name}</td>
+                    <td class="px-2 sm:px-4 py-2 sm:py-3 text-center text-slate-600">\${item.target}</td>
+                    <td class="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-indigo-600">\${item.actual}</td>
+                    <td class="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                       <span class="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-medium whitespace-nowrap \${Number(item.achieve) >= 100 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
+                        \${item.achieve}%
+                       </span>
+                    </td>
+                    <td class="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium">
+                      \${item.target > 0 ? (
+                        item.reward < 0 
+                        ? \`<span class="text-rose-600 whitespace-nowrap">- Rp \${Math.abs(item.reward).toLocaleString('id-ID')}</span>\`
+                        : \`<span class="text-emerald-600 whitespace-nowrap">+ Rp \${item.reward.toLocaleString('id-ID')}</span>\`
+                      ) : '-'}
+                    </td>
+                </tr>
+            \`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function renderTable() {
+        const query = document.getElementById('searchInput').value.toLowerCase();
+        const tbody = document.getElementById('surveyTableBody');
+        const filtered = surveys.filter(s => 
+           (s.nama_toko || '').toLowerCase().includes(query) ||
+           (s.cabang || '').toLowerCase().includes(query) ||
+           (s.salesman_name || '').toLowerCase().includes(query)
+        );
+        
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-500">Belum ada data survey atau tidak ditemukan.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(s => {
+           let fotoCol = '';
+           if (s.foto_toko) {
+               fotoCol = \`<button onclick="viewPhoto('\${s.foto_toko}')" class="text-indigo-600 hover:text-indigo-800" title="Lihat Foto"><i class="fa-solid fa-image"></i></button>\`;
+           } else {
+               fotoCol = \`<i class="fa-solid fa-image text-slate-300"></i>\`;
+           }
+
+           let GPSCol = '';
+           if (s.latitude && s.longitude) {
+              GPSCol = \`<a href="https://www.google.com/maps?q=\${s.latitude},\${s.longitude}" target="_blank" rel="noreferrer" class="text-indigo-600 hover:text-indigo-800"><i class="fa-solid fa-location-dot"></i></a>\`;
+           } else {
+              GPSCol = \`<i class="fa-solid fa-location-dot text-slate-300"></i>\`;
+           }
+
+           let stokHTML = '-';
+           if (s.ada_stok_lcd_batrai) {
+               const stClassName = s.ada_stok_lcd_batrai === 'Ada Keduanya' ? 'bg-emerald-50 text-emerald-700' :
+                                   s.ada_stok_lcd_batrai.includes('Saja') ? 'bg-amber-50 text-amber-700' :
+                                   'bg-slate-100 text-slate-700';
+               stokHTML = \`<span class="px-2 py-1 rounded-full text-[10px] font-medium \${stClassName}">\${s.ada_stok_lcd_batrai}</span>\`;
+           }
+           
+           const statusValidClassName = s.status_validation === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700';
+           const rowClassName = s.status_validation === 'Rejected' ? 'bg-red-50/50 hover:bg-red-50' : 'hover:bg-slate-50';
+
+           html += \`
+             <tr class="border-b transition-colors \${rowClassName}">
+               <td class="px-4 py-3">
+                  <div class="flex items-start gap-2">
+                     <div>
+                        <div class="font-medium text-slate-900 flex items-center gap-2">
+                           \${s.nama_toko || '-'}
+                           <button onclick="editSurvey('\${s.id}')" class="text-indigo-600 hover:text-indigo-800" title="Edit/Lengkapi Data"><i class="fa-solid fa-pen-to-square"></i></button>
+                           \${s.status_validation === 'Rejected' ? '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 uppercase tracking-widest">Tidak Valid</span>' : ''}
+                        </div>
+                        <div class="text-xs text-slate-500 truncate max-w-[200px] whitespace-normal line-clamp-2">\${s.alamat_toko || '-'}</div>
+                     </div>
+                  </div>
+               </td>
+               <td class="px-4 py-3">
+                  <div class="text-slate-900">\${s.cabang || '-'}</div>
+                  <div class="text-xs text-slate-500">\${s.kecamatan || '-'}</div>
+               </td>
+               <td class="px-4 py-3">
+                  <div class="text-slate-900">\${s.salesman_name || '-'}</div>
+                  <div class="text-xs text-slate-500">\${s.no_telepon || '-'}</div>
+               </td>
+               <td class="px-4 py-3">Rp \${Number(s.total_omset_lcd).toLocaleString('id-ID')}</td>
+               <td class="px-4 py-3">Rp \${Number(s.total_omset_batrai).toLocaleString('id-ID')}</td>
+               <td class="px-4 py-3">
+                  <div class="flex gap-3 items-center">
+                     \${fotoCol}
+                     \${GPSCol}
+                  </div>
+               </td>
+               <td class="px-4 py-3">\${stokHTML}</td>
+               <td class="px-4 py-3">
+                  <span class="px-2 py-1 rounded-full text-[10px] font-medium \${s.status_regist ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-700'}">
+                    \${s.status_regist || 'Belum Regist'}
+                  </span>
+               </td>
+             </tr>
+           \`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    window.renderLcdItems = function() {
+        let html = '';
+        const fBrand = getFieldConf('lcd_brand', 'Brand', 'Meetoo, dll', 'half');
+        const fHarga = getFieldConf('lcd_harga', 'Harga', '0', 'half');
+        lcdItems.forEach((item, i) => {
+            html += \`<div class="relative p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 flex flex-wrap -mx-1.5 group">
+                <div class="\${fBrand.widthClass} px-1.5 mb-3">
+                    <label class="text-[9px] font-black uppercase text-indigo-400 tracking-wider mb-1 block">\${fBrand.label} <span class="text-rose-500">*</span></label>
+                    <input required type="text" value="\${item.brand || ''}" onchange="updateLcdItem(\${i}, 'brand', this.value)" placeholder="\${fBrand.placeholder}" class="w-full px-2 py-1.5 bg-white border border-indigo-100 rounded text-xs font-bold text-indigo-900 outline-none">
+                </div>
+                <div class="\${fHarga.widthClass} px-1.5 mb-3">
+                    <label class="text-[9px] font-black uppercase text-indigo-400 tracking-wider mb-1 block">\${fHarga.label} <span class="text-rose-500">*</span></label>
+                    <input required type="number" value="\${item.harga || ''}" onchange="updateLcdItem(\${i}, 'harga', this.value)" placeholder="\${fHarga.placeholder}" class="w-full px-2 py-1.5 bg-white border border-indigo-100 rounded text-xs font-bold text-indigo-900 outline-none">
+                </div>
+                \${lcdItems.length > 1 ? \`<button type="button" onclick="removeLcdItem(\${i})" class="absolute -top-2 -right-2 bg-rose-500 text-white w-5 h-5 flex items-center justify-center rounded-full hover:bg-rose-600 shadow-md transition-all active:scale-90"><i class="fa-solid fa-xmark text-[10px]"></i></button>\` : ''}
+            </div>\`;
+        });
+        document.getElementById('lcdItemsContainer').innerHTML = html;
+        if (window.checkFormValidity) window.checkFormValidity();
+    };
+
+    window.updateLcdItem = function(i, field, value) { lcdItems[i][field] = value; if (window.checkFormValidity) window.checkFormValidity(); };
+    window.removeLcdItem = function(i) { lcdItems.splice(i, 1); renderLcdItems(); if (window.checkFormValidity) window.checkFormValidity(); };
+
+    window.renderBatraiItems = function() {
+        let html = '';
+        const fBrand = getFieldConf('batrai_brand', 'Brand', 'Brader, dll', 'half');
+        const fHarga = getFieldConf('batrai_harga', 'Harga', '0', 'half');
+        batraiItems.forEach((item, i) => {
+            html += \`<div class="relative p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 flex flex-wrap -mx-1.5 group">
+                <div class="\${fBrand.widthClass} px-1.5 mb-3">
+                    <label class="text-[9px] font-black uppercase text-emerald-400 tracking-wider mb-1 block">\${fBrand.label} <span class="text-rose-500">*</span></label>
+                    <input required type="text" value="\${item.brand || ''}" onchange="updateBatraiItem(\${i}, 'brand', this.value)" placeholder="\${fBrand.placeholder}" class="w-full px-2 py-1.5 bg-white border border-emerald-100 rounded text-xs font-bold text-emerald-900 outline-none">
+                </div>
+                <div class="\${fHarga.widthClass} px-1.5 mb-3">
+                    <label class="text-[9px] font-black uppercase text-emerald-400 tracking-wider mb-1 block">\${fHarga.label} <span class="text-rose-500">*</span></label>
+                    <input required type="number" value="\${item.harga || ''}" onchange="updateBatraiItem(\${i}, 'harga', this.value)" placeholder="\${fHarga.placeholder}" class="w-full px-2 py-1.5 bg-white border border-emerald-100 rounded text-xs font-bold text-emerald-900 outline-none">
+                </div>
+                \${batraiItems.length > 1 ? \`<button type="button" onclick="removeBatraiItem(\${i})" class="absolute -top-2 -right-2 bg-rose-500 text-white w-5 h-5 flex items-center justify-center rounded-full hover:bg-rose-600 shadow-md transition-all active:scale-90"><i class="fa-solid fa-xmark text-[10px]"></i></button>\` : ''}
+            </div>\`;
+        });
+        document.getElementById('batraiItemsContainer').innerHTML = html;
+        if (window.checkFormValidity) window.checkFormValidity();
+    };
+
+    window.updateBatraiItem = function(i, field, value) { batraiItems[i][field] = value; if (window.checkFormValidity) window.checkFormValidity(); };
+    window.removeBatraiItem = function(i) { batraiItems.splice(i, 1); renderBatraiItems(); if (window.checkFormValidity) window.checkFormValidity(); };
+
+    window.viewPhoto = function(base64) {
+        document.getElementById('enlargedPhoto').src = base64;
+        document.getElementById('photoModal').classList.remove('hidden');
+        document.getElementById('photoModal').classList.add('flex');
+    };
+
+    window.editSurvey = function(id) {
+        const s = surveys.find(x => x.id === id);
+        if (!s) return;
+        editId = id;
+        
+        document.getElementById('mainView').classList.add('hidden');
+        document.getElementById('formView').classList.remove('hidden');
+        document.getElementById('formTitle').textContent = 'Edit Data Survey';
+        document.getElementById('formSubtitle').textContent = 'Edit atau lengkapi data toko ini (' + (s.nama_toko || '') + ')';
+        
+        dynamicData = s.extra_data || {};
+        buildDynamicFormInputs();
+        
+        formFields.forEach(f => {
+            const el = document.getElementById('dyn_' + f.name);
+            if (el) {
+                let v = s[f.name] !== undefined ? s[f.name] : dynamicData[f.name];
+                el.value = v || '';
+                dynamicData[f.name] = v || '';
+            }
+        });
+        
+        // standard fallback elements
+        if (document.getElementById('fm_nama')) document.getElementById('fm_nama').value = s.nama_toko || '';
+        if (document.getElementById('fm_kecamatan')) document.getElementById('fm_kecamatan').value = s.kecamatan || '';
+        if (document.getElementById('fm_cabang')) document.getElementById('fm_cabang').value = s.cabang || 'Bandung';
+        if (document.getElementById('fm_sales')) document.getElementById('fm_sales').value = s.salesman_name || '';
+        if (document.getElementById('fm_pj')) document.getElementById('fm_pj').value = s.pengambil_keputusan || '';
+        if (document.getElementById('fm_telp')) document.getElementById('fm_telp').value = s.no_telepon || '';
+        
+        document.getElementById('fm_alamat').value = s.alamat_toko || '';
+        document.getElementById('fm_lcd_dari').value = s.order_lcd_dari || '';
+        document.getElementById('fm_lcd_omset').value = s.total_omset_lcd || 0;
+        document.getElementById('fm_batrai_dari').value = s.order_batrai_dari || '';
+        document.getElementById('fm_batrai_omset').value = s.total_omset_batrai || 0;
+        document.getElementById('fm_support').value = s.butuh_support || 'Tidak';
+        document.getElementById('fm_stok').value = s.ada_stok_lcd_batrai || '';
+        document.getElementById('fm_regist').value = s.status_regist || 'Belum Regist';
+
+        // Load Items
+        try { lcdItems = JSON.parse(s.data_lcd || '[{brand:"", harga:""}]'); } catch { lcdItems = [{brand:'', harga:''}]; }
+        try { batraiItems = JSON.parse(s.data_batrai || '[{brand:"", harga:""}]'); } catch { batraiItems = [{brand:'', harga:''}]; }
+        if (!lcdItems.length) lcdItems.push({brand:'', harga:''});
+        if (!batraiItems.length) batraiItems.push({brand:'', harga:''});
+        renderLcdItems();
+        renderBatraiItems();
+
+        if (s.latitude && s.longitude) {
+            document.getElementById('fm_lat').value = s.latitude;
+            document.getElementById('fm_lng').value = s.longitude;
+            document.getElementById('locText').textContent = 'Tersimpan: (' + s.latitude + ', ' + s.longitude + ')';
+        } else {
+            document.getElementById('locText').textContent = 'Lokasi tidak tersedia';
+            document.getElementById('fm_lat').value = '';
+            document.getElementById('fm_lng').value = '';
+        }
+        
+        if (s.foto_toko) {
+            photoBase64 = s.foto_toko;
+            document.getElementById('formImgPreview').src = photoBase64;
+            document.getElementById('fotoPreviewBox').classList.remove('hidden');
+            document.getElementById('fotoCaptureBox').classList.add('hidden');
+        } else {
+            photoBase64 = '';
+            document.getElementById('fotoPreviewBox').classList.add('hidden');
+            document.getElementById('fotoCaptureBox').classList.remove('hidden');
+            document.getElementById('formImgPreview').src = '';
+        }
+        if (window.checkFormValidity) window.checkFormValidity();
+    };
+
+    function switchView(view) {
+        if (view === 'form') {
+            editId = null;
+            dynamicData = {};
+            buildDynamicFormInputs();
+            lcdItems = [{brand: '', harga: ''}];
+            batraiItems = [{brand: '', harga: ''}];
+            renderLcdItems();
+            renderBatraiItems();
+            document.getElementById('mainView').classList.add('hidden');
+            document.getElementById('formView').classList.remove('hidden');
+            document.getElementById('formTitle').textContent = 'Tambah Data Survey';
+            document.getElementById('formSubtitle').textContent = 'Isi form dengan lengkap dan benar';
+            document.getElementById('surveyForm').reset();
+            photoBase64 = '';
+            document.getElementById('fotoPreviewBox').classList.add('hidden');
+            document.getElementById('fotoCaptureBox').classList.remove('hidden');
+            document.getElementById('formImgPreview').src = '';
+            doGetLoc();
+            if (window.checkFormValidity) window.checkFormValidity();
+        } else {
+            document.getElementById('formView').classList.add('hidden');
+            document.getElementById('mainView').classList.remove('hidden');
+        }
+    }
+
+    function setupListeners() {
+        document.getElementById('searchInput').addEventListener('input', renderTable);
+        document.getElementById('mainAddBtn').addEventListener('click', () => switchView('form'));
+        document.getElementById('backBtn').addEventListener('click', () => switchView('main'));
+        document.getElementById('cancelFormBtn').addEventListener('click', () => switchView('main'));
+        
+        const testFillBtn = document.getElementById('testFillBtn');
+        if (testFillBtn) {
+            testFillBtn.addEventListener('click', () => {
+                const setValue = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) { el.value = val; if (window.checkFormValidity) window.checkFormValidity(); }
+                };
+                setValue('fm_kecamatan', 'Test Kecamatan');
+                setValue('fm_cabang', 'Test Cabang');
+                setValue('fm_nama', 'Toko Test Otomatis');
+                setValue('fm_pj', 'Bpk. Test');
+                setValue('fm_telp', '081234567890');
+                setValue('fm_alamat', 'Jl. Test Automation No. 123');
+                setValue('fm_lcd_omset', '500000');
+                setValue('fm_lcd_dari', 'Vio Cell');
+                setValue('fm_batrai_omset', '250000');
+                setValue('fm_batrai_dari', 'Supplier A');
+                setValue('fm_support', 'Tidak Ada');
+                setValue('fm_stok', 'Tidak Ada Keduanya');
+                setValue('fm_regist', 'Belum Regist');
+                
+                const sales = document.getElementById('fm_sales');
+                if (sales && sales.options.length > 1) { sales.selectedIndex = 1; }
+                
+                if (formFields.length > 0) {
+                    formFields.forEach(f => {
+                         if (!['total_omset_lcd', 'order_lcd_dari', 'total_omset_batrai', 'order_batrai_dari', 'status_regist', 'butuh_support', 'ada_stok_lcd_batrai', 'alamat_toko', 'lcd_brand', 'lcd_harga', 'batrai_brand', 'batrai_harga', 'nama_toko', 'kecamatan', 'cabang', 'salesman_name', 'pengambil_keputusan', 'no_telepon'].includes(f.name)) {
+                             const el = document.getElementById('dyn_' + f.name);
+                             if (el) {
+                                 let textVal = 'Test ' + f.label;
+                                 if (f.type === 'number') textVal = '123';
+                                 if (f.type === 'select' && el.options.length > 1) el.selectedIndex = 1;
+                                 else el.value = textVal;
+                                 dynamicData[f.name] = el.value;
+                             }
+                         }
+                    });
+                }
+                
+                if (lcdItems.length > 0) {
+                    lcdItems[0].brand = 'Test LCD';
+                    lcdItems[0].harga = '150000';
+                    renderLcdItems();
+                }
+                if (batraiItems.length > 0) {
+                    batraiItems[0].brand = 'Test Baterai';
+                    batraiItems[0].harga = '75000';
+                    renderBatraiItems();
+                }
+                if (window.checkFormValidity) window.checkFormValidity();
+            });
+        }
+        
+        document.getElementById('closePhotoModal').addEventListener('click', () => {
+            document.getElementById('photoModal').classList.add('hidden');
+            document.getElementById('photoModal').classList.remove('flex');
+        });
+
+        document.getElementById('surveyForm').addEventListener('input', checkFormValidity);
+        document.getElementById('surveyForm').addEventListener('change', checkFormValidity);
+
+        function checkFormValidity() {
+            const form = document.getElementById('surveyForm');
+            const btn = document.getElementById('saveFormBtn');
+            let isValid = form.checkValidity();
+            
+            if (!photoBase64) isValid = false;
+            if (!document.getElementById('fm_lat').value || !document.getElementById('fm_lng').value) isValid = false;
+            if (lcdItems.some(i => !i.brand || !i.harga)) isValid = false;
+            if (batraiItems.some(i => !i.brand || !i.harga)) isValid = false;
+            
+            if (isValid) {
+                btn.disabled = false;
+                btn.className = "flex-[2] rounded-xl font-black uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-100 py-3 transition-all flex justify-center items-center gap-2 active:scale-95 cursor-pointer";
+            } else {
+                btn.disabled = true;
+                btn.className = "flex-[2] rounded-xl font-black uppercase tracking-widest bg-slate-200 text-slate-400 cursor-not-allowed shadow-none py-3 transition-all flex justify-center items-center gap-2";
+            }
+        }
+        
+        // Expose function so we can manually call it
+        window.checkFormValidity = checkFormValidity;
+
+        document.getElementById('fotoCaptureBox').addEventListener('click', () => document.getElementById('fotoInput').click());
+        document.getElementById('clearFotoBtn').addEventListener('click', () => {
+            photoBase64 = '';
+            document.getElementById('fotoPreviewBox').classList.add('hidden');
+            document.getElementById('fotoCaptureBox').classList.remove('hidden');
+            document.getElementById('fotoInput').value = '';
+            if (window.checkFormValidity) window.checkFormValidity();
+        });
+
+        document.getElementById('fotoInput').addEventListener('change', async (e) => {
+             const file = e.target.files[0];
+             if (!file) return;
+             if (window.imageCompression) {
+                 try {
+                     const comp = await imageCompression(file, { maxSizeMB: 0.1, maxWidthOrHeight: 800 });
+                     const reader = new FileReader();
+                     reader.onload = (evt) => {
+                         photoBase64 = evt.target.result;
+                         document.getElementById('formImgPreview').src = photoBase64;
+                         document.getElementById('fotoCaptureBox').classList.add('hidden');
+                         document.getElementById('fotoPreviewBox').classList.remove('hidden');
+                         if (window.checkFormValidity) window.checkFormValidity();
+                     };
+                     reader.readAsDataURL(comp);
+                 } catch(err) { alert('Gagal memproses foto'); }
+             } else {
+                 const reader = new FileReader();
+                 reader.onload = (evt) => {
+                     photoBase64 = evt.target.result;
+                     document.getElementById('formImgPreview').src = photoBase64;
+                     document.getElementById('fotoCaptureBox').classList.add('hidden');
+                     document.getElementById('fotoPreviewBox').classList.remove('hidden');
+                     if (window.checkFormValidity) window.checkFormValidity();
+                 };
+                 reader.readAsDataURL(file);
+             }
+        });
+
+        document.getElementById('getLocBtn').addEventListener('click', doGetLoc);
+        
+        document.getElementById('addLcdBtn').addEventListener('click', () => { lcdItems.push({brand: '', harga: ''}); renderLcdItems(); });
+        document.getElementById('addBatraiBtn').addEventListener('click', () => { batraiItems.push({brand: '', harga: ''}); renderBatraiItems(); });
+
+        document.getElementById('surveyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('saveFormBtn');
+            const data = {
+               nama_toko: document.getElementById('fm_nama') ? document.getElementById('fm_nama').value : dynamicData.nama_toko,
+               kecamatan: document.getElementById('fm_kecamatan') ? document.getElementById('fm_kecamatan').value : dynamicData.kecamatan,
+               cabang: document.getElementById('fm_cabang') ? document.getElementById('fm_cabang').value : dynamicData.cabang,
+               salesman_name: document.getElementById('fm_sales') ? document.getElementById('fm_sales').value : dynamicData.salesman_name,
+               alamat_toko: document.getElementById('fm_alamat').value,
+               pengambil_keputusan: document.getElementById('fm_pj') ? document.getElementById('fm_pj').value : dynamicData.pengambil_keputusan,
+               no_telepon: document.getElementById('fm_telp') ? document.getElementById('fm_telp').value : dynamicData.no_telepon,
+               total_omset_lcd: Number(document.getElementById('fm_lcd_omset').value) || 0,
+               order_lcd_dari: document.getElementById('fm_lcd_dari').value,
+               total_omset_batrai: Number(document.getElementById('fm_batrai_omset').value) || 0,
+               order_batrai_dari: document.getElementById('fm_batrai_dari').value,
+               latitude: document.getElementById('fm_lat').value,
+               longitude: document.getElementById('fm_lng').value,
+               foto_toko: photoBase64,
+               status_regist: document.getElementById('fm_regist').value || 'Belum Regist',
+               status_validation: 'Valid',
+               butuh_support: document.getElementById('fm_support').value,
+               ada_stok_lcd_batrai: document.getElementById('fm_stok').value,
+               data_lcd: JSON.stringify(lcdItems),
+               data_batrai: JSON.stringify(batraiItems),
+               extra_data: dynamicData
+            };
+
+            if (!data.nama_toko || !data.kecamatan || !data.salesman_name || !data.foto_toko) {
+                alert('Silakan lengkapi form dan wajib sertakan foto toko!');
+                return;
+            }
+
+            btn.innerHTML = '<span class="loader border-white w-4 h-4 mr-2"></span> Menyimpan...';
+            btn.disabled = true;
+
+            try {
+                let url = \`\${SUPABASE_URL}/rest/v1/survey_channel\`;
+                let method = 'POST';
+                if (editId) {
+                    url += \`?id=eq.\${editId}\`;
+                    method = 'PATCH';
+                }
+
+                const res = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'apikey': SUPABASE_KEY, 'Authorization': \`Bearer \${SUPABASE_KEY}\`,
+                        'Content-Type': 'application/json', 'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify(data)
+                });
+                if (res.ok) {
+                    alert('Data survey berhasil disimpan!');
+                    switchView('main');
+                    await fetchSurveys();
+                } else throw new Error('Network error');
+            } catch(e) {
+                alert('Gagal menyimpan data');
+            } finally {
+                btn.innerHTML = '<i class="fa-solid fa-save"></i> Simpan Data Survey';
+                btn.disabled = false;
+            }
+        });
+    }
+
+    function doGetLoc() {
+        const text = document.getElementById('locText');
+        text.innerHTML = 'Mencari lokasi <span class="loader border-slate-400 w-3 h-3 ml-1"></span>';
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const lat = pos.coords.latitude; const lng = pos.coords.longitude;
+                document.getElementById('fm_lat').value = lat;
+                document.getElementById('fm_lng').value = lng;
+                text.innerHTML = \`<span class="text-emerald-500"><i class="fa-solid fa-check mr-1"></i> Lokasi didapat (Akurasi: \${Math.round(pos.coords.accuracy)}m)</span>\`;
+                try {
+                    const r = await fetch(\`https://nominatim.openstreetmap.org/reverse?format=json&lat=\${lat}&lon=\${lng}\`);
+                    const d = await r.json();
+                    if (d && d.display_name) document.getElementById('fm_alamat').value = d.display_name;
+                } catch(e){}
+                if (window.checkFormValidity) window.checkFormValidity();
+            }, () => { 
+                text.textContent = 'Gagal akses GPS. Izinkan lokasi.'; 
+                if (window.checkFormValidity) window.checkFormValidity();
+            }, {enableHighAccuracy: true});
+        } else {
+            text.textContent = 'GPS tidak didukung browser ini';
+            if (window.checkFormValidity) window.checkFormValidity();
+        }
+    }
+
+    init();
+  <\/script>
+</body>
+</html>

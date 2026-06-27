@@ -101,6 +101,11 @@ export const buildSimplePricelistHtml = (
       let customPromos = [];
       const hpBrand = String(p.brand_hp || p.brand || '').toLowerCase();
       for (const promo of promos) {
+        const active = promo.activeFor || [10, 12, 15, 18];
+        if (!active.includes(DISCOUNT)) {
+          continue;
+        }
+
         if (promo.selected_products && Array.isArray(promo.selected_products) && promo.selected_products.includes(p.id)) {
           customPromos.push(promo);
           continue;

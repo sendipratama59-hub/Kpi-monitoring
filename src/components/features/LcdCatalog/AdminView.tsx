@@ -30,7 +30,6 @@ export function AdminLcdCatalog() {
   const [activeTab, setActiveTab] = useState<'list' | 'upload' | 'salesmen' | 'grosir' | 'promos' | 'hero' | 'warranties' | 'visitors'>('list');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState<string>('LCD_Catalog_List.html');
-  const [promoActiveFor, setPromoActiveFor] = useState<number[]>([10, 12, 15, 18]);
   const [products, setProducts] = useState<LcdProduct[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -81,7 +80,7 @@ export function AdminLcdCatalog() {
   // Promos State
   const [promos, setPromos] = useState<any[]>([]);
   const [isEditingPromo, setIsEditingPromo] = useState(false);
-  const defaultPromoForm = { id: '', name: '', type: 'product_list', value: '', discountPercentage: 10, target_brand: 'Semua', target_hp_brands: [] as string[], search: '', selected_products: [] as string[], terms: '' };
+  const defaultPromoForm = { id: '', name: '', type: 'product_list', value: '', discountPercentage: 10, target_brand: 'Semua', target_hp_brands: [] as string[], search: '', selected_products: [] as string[], terms: '', activeFor: [10, 12, 15, 18] };
   const [promoForm, setPromoForm] = useState(defaultPromoForm);
 
   // Warranties State
@@ -825,8 +824,7 @@ export function AdminLcdCatalog() {
   };
 
   const handlePreviewSimple = (discount: number) => {
-    const applyPromo = promoActiveFor.includes(discount);
-    const html = buildSimplePricelistHtml(import.meta.env.VITE_SUPABASE_URL || '', import.meta.env.VITE_SUPABASE_ANON_KEY || '', discount, applyPromo);
+    const html = buildSimplePricelistHtml(import.meta.env.VITE_SUPABASE_URL || '', import.meta.env.VITE_SUPABASE_ANON_KEY || '', discount, true);
     setPreviewHtml(html);
     setPreviewTitle(`Pricelist_LCD_Diskon_${discount}.html`);
   };
@@ -906,29 +904,6 @@ export function AdminLcdCatalog() {
             <p className="text-indigo-200 text-sm">Kelola harga, stok, dan upload pricelist.</p>
             
             <div className="flex flex-col gap-2 mt-3 bg-indigo-900/40 p-2 rounded-lg border border-indigo-700/50">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-indigo-200 font-bold">Terapkan Promo Khusus ke HTML:</span>
-                <div className="flex gap-3 flex-wrap">
-                  {[10, 12, 15, 18].map(d => (
-                    <label key={`chk-${d}`} className="flex items-center gap-1 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={promoActiveFor.includes(d)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setPromoActiveFor(prev => [...prev, d]);
-                          } else {
-                            setPromoActiveFor(prev => prev.filter(x => x !== d));
-                          }
-                        }}
-                        className="rounded border-indigo-500 text-indigo-500 bg-indigo-900/50 focus:ring-indigo-500 w-3 h-3"
-                      />
-                      <span className="text-[10px] text-indigo-100">{d}%</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
               <div className="hidden sm:flex flex-wrap gap-2">
                 {[10, 12, 15, 18].map(d => (
                   <button 
@@ -1532,6 +1507,30 @@ export function AdminLcdCatalog() {
                     <div>
                       <label className="text-xs font-bold text-slate-500 uppercase">Diskon Promo (%)</label>
                       <input type="number" min="1" max="100" value={promoForm.discountPercentage} onChange={e => setPromoForm({...promoForm, discountPercentage: Number(e.target.value)})} className="w-full mt-1 border rounded-lg p-2" />
+                    </div>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Berlaku Pada Preview HTML:</label>
+                    <div className="flex gap-4">
+                      {[10, 12, 15, 18].map(d => (
+                        <label key={`pa-${d}`} className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={promoForm.activeFor?.includes(d) ?? true}
+                            onChange={(e) => {
+                              const active = promoForm.activeFor || [10, 12, 15, 18];
+                              if (e.target.checked) {
+                                setPromoForm({ ...promoForm, activeFor: [...active, d] });
+                              } else {
+                                setPromoForm({ ...promoForm, activeFor: active.filter((x: number) => x !== d) });
+                              }
+                            }}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-sm text-slate-700">{d}%</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
                   

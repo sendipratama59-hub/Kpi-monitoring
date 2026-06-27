@@ -130,9 +130,9 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
       let highlighted = String(text);
       for (const term of terms) {
         if (!term) continue;
-        const escaped = term.replace(/[\\-\\[\\]\\/\\{\\}\\(\\)\\*\\+\\?\\.\\\\\\^\\$\\|]/g, '\\\\$&');
+        const escaped = String(term).replace(/[\\-\\[\\]\\/\\{\\}\\(\\)\\*\\+\\?\\.\\\\\\^\\$\\|]/g, '\\\\$&');
         const regex = new RegExp('(' + escaped + ')', 'gi');
-        highlighted = highlighted.replace(regex, '<mark>$1</mark>');
+        highlighted = highlighted.replace(regex, '<mark class="bg-yellow-200 text-slate-800 rounded px-0.5">$1</mark>');
       }
       return highlighted;
     }
@@ -140,21 +140,21 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
     // Function to calculate exact promo array for a product
     function calculatePromos(p) {
       let customPromos = [];
-      const hpBrand = p.brand_hp || p.brand || '';
+      const hpBrand = String(p.brand_hp || p.brand || '').toLowerCase();
       for (const promo of promos) {
-        if (promo.selected_products && promo.selected_products.includes(p.id)) {
+        if (promo.selected_products && Array.isArray(promo.selected_products) && promo.selected_products.includes(p.id)) {
           customPromos.push(promo);
           continue;
         }
-        if (promo.type === 'brand' && hpBrand.toLowerCase().includes((promo.value || '').toLowerCase())) {
+        if (promo.type === 'brand' && hpBrand.includes(String(promo.value || '').toLowerCase())) {
           customPromos.push(promo);
           continue;
         }
-        if (promo.type === 'model' && (p.model_hp || '').toLowerCase().includes((promo.value || '').toLowerCase())) {
+        if (promo.type === 'model' && String(p.model_hp || '').toLowerCase().includes(String(promo.value || '').toLowerCase())) {
           customPromos.push(promo);
           continue;
         }
-        if (promo.type === 'product' && promo.value === p.id) {
+        if (promo.type === 'product' && String(promo.value) === String(p.id)) {
           customPromos.push(promo);
           continue;
         }
@@ -164,28 +164,45 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
 
     function parseDiscountsText(p, customPromos) {
       if (customPromos.length > 0) {
-        return customPromos.map(pr => pr.discountPercentage + '% diskon ' + pr.discountPercentage + '%').join(' ');
+        return customPromos.map(pr => {
+          const disc = pr.discount_percentage || pr.discountPercentage || 0;
+          return disc + '% diskon ' + disc + '%';
+        }).join(' ');
       }
-      const disc = p.custom_discount || globalDiscount;
-      const parts = disc.split(/[,+]/).map(d => d.trim()).filter(Boolean);
+      const disc = String(p.custom_discount || globalDiscount || '10');
+      const parts = disc.split(/[,+]/).map(d => String(d).trim()).filter(Boolean);
       return parts.map(d => {
-        const v = d.split(':').pop();
+        const v = String(d).split(':').pop();
         return v + '% diskon ' + v + '%';
       }).join(' ');
     }
 
     async function loadData() {
       try {
-        const [prodRes, contentRes] = await Promise.all([
-          fetch(SUPABASE_URL + '/rest/v1/lcd_catalog_products?select=*', {
-             headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-          }),
-          fetch(SUPABASE_URL + '/rest/v1/lcd_catalog_content?select=*', {
-             headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-          })
-        ]);
+        let allProducts = [];
+        let from = 0;
+        let limit = 1000;
+        let hasMore = true;
         
-        const prodData = await prodRes.json();
+        while(hasMore) {
+           const pRes = await fetch(SUPABASE_URL + '/rest/v1/lcd_catalog_products?select=*&limit=' + limit + '&offset=' + from, {
+               headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+           });
+           const pData = await pRes.json();
+           if (pData && pData.length > 0) {
+              allProducts = allProducts.concat(pData);
+              from += limit;
+              if (pData.length < limit) hasMore = false;
+           } else {
+              hasMore = false;
+           }
+        }
+        
+        const contentRes = await fetch(SUPABASE_URL + '/rest/v1/lcd_catalog_content?select=*', {
+             headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+        });
+        
+        const prodData = allProducts;
         const contentData = await contentRes.json();
         
         products = Array.isArray(prodData) ? prodData : [];
@@ -267,24 +284,35 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
     function renderList() {
       const container = document.getElementById('pList');
       const search = document.getElementById('searchInput').value.toLowerCase().trim();
-      const terms = search.split(/\s+/);
+      const terms = search.split(/\\s+/);
 
       let filteredList = [];
 
       // Filter
       for (let p of products) {
-        let match = true;
-        if (terms.length > 0 && terms[0] !== '') {
-          const customPromos = calculatePromos(p);
-          const dText = parseDiscountsText(p, customPromos);
-          const searchStr = ((p.goods_code || '') + ' ' + (p.brand_lcd || '') + ' ' + (p.brand_hp || '') + ' ' + (p.brand || '') + ' ' + (p.model_hp || '') + ' ' + (p.type_lcd || '') + ' ' + (p.packing || '') + ' ' + dText).toLowerCase();
-          for (const term of terms) {
-            if (!searchStr.includes(term)) {
-               match = false; break;
+        try {
+          let match = true;
+          if (terms.length > 0 && terms[0] !== '') {
+            const customPromos = calculatePromos(p);
+            const dText = parseDiscountsText(p, customPromos);
+            const searchStr = (String(p.goods_code || '') + ' ' + 
+                               String(p.brand_lcd || '') + ' ' + 
+                               String(p.brand_hp || '') + ' ' + 
+                               String(p.brand || '') + ' ' + 
+                               String(p.model_hp || '') + ' ' + 
+                               String(p.type_lcd || '') + ' ' + 
+                               String(p.packing || '') + ' ' + 
+                               String(dText || '')).toLowerCase();
+            for (const term of terms) {
+              if (!searchStr.includes(term)) {
+                 match = false; break;
+              }
             }
           }
+          if (match) filteredList.push(p);
+        } catch (e) {
+          console.error("Error filtering product", e);
         }
-        if (match) filteredList.push(p);
       }
       
       renderPagination(filteredList.length);
@@ -302,7 +330,7 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
         const isVivan = pBrandLcd.toLowerCase() === 'vivan';
         
         const packingStr = String(p.packing || '1');
-        const pcsMatch = packingStr.match(/(\d+)\s*pcs/i) || packingStr.match(/(\d+)/);
+        const pcsMatch = packingStr.match(/(\\d+)\\s*pcs/i) || packingStr.match(/(\\d+)/);
         const pcsPerKotak = pcsMatch ? parseInt(pcsMatch[1], 10) : 1;
         
         const hargaKotak = p.price || 0;
@@ -316,7 +344,7 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
         if (p.stock_status === 'Kosong' || p.stock === '0' || Number(p.stock) === 0) stockClass = 'bg-rose-100 text-rose-700';
         else if (p.stock_status === 'Indent') stockClass = 'bg-amber-100 text-amber-700';
 
-        const customDiscStr = p.custom_discount || globalDiscount;
+        const customDiscStr = String(p.custom_discount || globalDiscount || '10');
         const discLevels = customDiscStr.split(/[,+]/).map(d => d.trim()).filter(Boolean);
         
         let isNoMinOrder = false;
@@ -436,7 +464,7 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
     function buildExportTableHtml(exportList) {
       const discountVal = parseFloat(document.getElementById('exportDiscount').value) || 0;
       let html = '<table class="export-table">';
-      html += '<thead><tr><th>No</th><th class="text-left">Tipe</th><th>Packing</th><th>Hrg Ktk</th><th>Hrg Pcs</th></tr></thead><tbody>';
+      html += '<thead><tr><th>No</th><th class="text-left">Brand LCD</th><th class="text-left">Tipe</th><th>Packing</th><th>Hrg Ktk</th><th>Hrg Pcs</th></tr></thead><tbody>';
       
       let count = 1;
       for (const p of exportList) {
@@ -447,7 +475,7 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
           disc = customPromos[0].discountPercentage || 0;
           discText = disc + '%';
         } else {
-          const customDiscStr = p.custom_discount || globalDiscount;
+          const customDiscStr = String(p.custom_discount || globalDiscount || '10');
           const discLevels = customDiscStr.split(/[,+]/).map(d => d.trim()).filter(Boolean);
           if (discLevels.length > 0) {
              const lastD = discLevels[discLevels.length - 1];
@@ -465,6 +493,7 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
         const hpBrand = (p.brand_hp || p.brand || '').trim();
         const hpModel = (p.model_hp || '').trim();
         const namaLcd = (hpBrand + ' ' + hpModel).trim();
+        const brandLcd = (p.brand_lcd || 'Vivan');
         
         const packingStr = String(p.packing || '1');
         const pcsMatch = packingStr.match(/(\\d+)\\s*pcs/i) || packingStr.match(/(\\d+)/);
@@ -478,6 +507,7 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
         
         html += '<tr>';
         html += '<td>' + count + '</td>';
+        html += '<td class="text-left">' + brandLcd.toUpperCase() + '</td>';
         html += '<td class="text-left">' + namaLcd + '</td>';
         html += '<td>' + packingStr + '</td>';
         html += '<td>' + Math.round(hargaKotak).toLocaleString('id-ID') + '</td>';
@@ -498,6 +528,15 @@ export const buildLcdCatalogListHtml = (SUPABASE_URL: string, SUPABASE_KEY: stri
         return b === bFilter;
       });
       res.sort((a, b) => {
+        if (bFilter === 'semua') {
+            const bLcdA = (a.brand_lcd || 'Vivan').toLowerCase();
+            const bLcdB = (b.brand_lcd || 'Vivan').toLowerCase();
+            if (bLcdA === 'xpas' && bLcdB !== 'xpas') return -1;
+            if (bLcdA !== 'xpas' && bLcdB === 'xpas') return 1;
+            if (bLcdA < bLcdB) return -1;
+            if (bLcdA > bLcdB) return 1;
+        }
+
         const brandA = (a.brand_hp || a.brand || '').toLowerCase();
         const brandB = (b.brand_hp || b.brand || '').toLowerCase();
         if (brandA < brandB) return -1;

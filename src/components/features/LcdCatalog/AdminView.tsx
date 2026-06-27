@@ -9,6 +9,7 @@ import { useAlert } from '../../ui/AlertModal';
 import { GenieModal } from '../../ui/GenieModal';
 import { VisitorsTab } from './VisitorsTab';
 import { buildLcdCatalogListHtml } from './buildLcdCatalogListHtml';
+import { buildSimplePricelistHtml } from './buildSimplePricelistHtml';
 
 interface LcdProduct {
   id?: string;
@@ -28,6 +29,8 @@ export function AdminLcdCatalog() {
   const { showAlert, showConfirm } = useAlert();
   const [activeTab, setActiveTab] = useState<'list' | 'upload' | 'salesmen' | 'grosir' | 'promos' | 'hero' | 'warranties' | 'visitors'>('list');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>('LCD_Catalog_List.html');
+  const [promoActiveFor, setPromoActiveFor] = useState<number[]>([10, 12, 15, 18]);
   const [products, setProducts] = useState<LcdProduct[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -818,12 +821,33 @@ export function AdminLcdCatalog() {
   const handlePreviewHtml = () => {
     const html = buildLcdCatalogListHtml(import.meta.env.VITE_SUPABASE_URL || '', import.meta.env.VITE_SUPABASE_ANON_KEY || '');
     setPreviewHtml(html);
+    setPreviewTitle('LCD_Catalog_List.html');
+  };
+
+  const handlePreviewSimple = (discount: number) => {
+    const applyPromo = promoActiveFor.includes(discount);
+    const html = buildSimplePricelistHtml(import.meta.env.VITE_SUPABASE_URL || '', import.meta.env.VITE_SUPABASE_ANON_KEY || '', discount, applyPromo);
+    setPreviewHtml(html);
+    setPreviewTitle(`Pricelist_LCD_Diskon_${discount}.html`);
   };
 
   const handleCopyLink = () => {
     const url = `https://kpi-monitoring-dashboard-670271053581.asia-southeast1.run.app/?view=catalog-lcd&shared=true`;
     navigator.clipboard.writeText(url);
     showAlert('Link brosur LCD telah disalin dan siap dibagikan.', 'success', 'Tersalin!');
+  };
+
+  const handleDownloadCurrentHtml = () => {
+    if (!previewHtml) return;
+    const blob = new Blob([previewHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = previewTitle;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (previewHtml) {
@@ -840,9 +864,9 @@ export function AdminLcdCatalog() {
           <button onClick={() => setPreviewHtml(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors text-sm">
              Tutup
           </button>
-          <button onClick={() => { handleDownloadHtml(); setPreviewHtml(null); }} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-md shadow-indigo-500/30 text-sm flex items-center justify-center gap-2">
+          <button onClick={() => { handleDownloadCurrentHtml(); setPreviewHtml(null); }} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-md shadow-indigo-500/30 text-sm flex items-center justify-center gap-2">
              <Download className="w-4 h-4" />
-             Download App
+             Download HTML
           </button>
         </div>
       </div>
@@ -880,31 +904,81 @@ export function AdminLcdCatalog() {
               </button>
             </div>
             <p className="text-indigo-200 text-sm">Kelola harga, stok, dan upload pricelist.</p>
+            
+            <div className="flex flex-col gap-2 mt-3 bg-indigo-900/40 p-2 rounded-lg border border-indigo-700/50">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-indigo-200 font-bold">Terapkan Promo Khusus ke HTML:</span>
+                <div className="flex gap-3 flex-wrap">
+                  {[10, 12, 15, 18].map(d => (
+                    <label key={`chk-${d}`} className="flex items-center gap-1 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={promoActiveFor.includes(d)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setPromoActiveFor(prev => [...prev, d]);
+                          } else {
+                            setPromoActiveFor(prev => prev.filter(x => x !== d));
+                          }
+                        }}
+                        className="rounded border-indigo-500 text-indigo-500 bg-indigo-900/50 focus:ring-indigo-500 w-3 h-3"
+                      />
+                      <span className="text-[10px] text-indigo-100">{d}%</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="hidden sm:flex flex-wrap gap-2">
+                {[10, 12, 15, 18].map(d => (
+                  <button 
+                    key={d}
+                    onClick={() => handlePreviewSimple(d)}
+                    className="text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-100 px-2 py-1.5 rounded-md flex items-center gap-1 font-bold transition-colors border border-slate-700 shadow-sm"
+                  >
+                    <MonitorSmartphone className="w-3 h-3" />
+                    <span>Preview {d}%</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-        <div className="flex gap-2 mb-2 w-full">
+        <div className="flex gap-2 mb-2 w-full flex-wrap sm:hidden">
           <button 
             onClick={handlePreviewHtml}
-            className="flex-1 sm:hidden flex justify-center text-sm bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-xl items-center gap-2 font-bold transition-colors border border-slate-600 shadow-sm"
+            className="flex-[1_1_calc(50%-0.25rem)] flex justify-center text-sm bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-xl items-center gap-2 font-bold transition-colors border border-slate-600 shadow-sm"
           >
             <MonitorSmartphone className="w-4 h-4" />
             <span>Preview</span>
           </button>
           <button 
             onClick={handleDownloadHtml}
-            className="flex-1 sm:hidden flex justify-center text-sm bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl items-center gap-2 font-bold transition-colors border border-emerald-500 shadow-sm"
+            className="flex-[1_1_calc(50%-0.25rem)] flex justify-center text-sm bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl items-center gap-2 font-bold transition-colors border border-emerald-500 shadow-sm"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Download</span>
           </button>
+          <button 
+            onClick={handleCopyLink}
+            className="flex-[1_1_100%] flex justify-center text-sm bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2.5 rounded-xl items-center gap-2 font-bold transition-colors border border-indigo-400 shadow-sm mb-2"
+          >
+            <Share2 className="w-4 h-4" />
+            <span>Salin Link Brosur</span>
+          </button>
+          <div className="flex w-full gap-2 mt-1 flex-wrap">
+              {[10, 12, 15, 18].map(d => (
+                <button 
+                  key={d}
+                  onClick={() => handlePreviewSimple(d)}
+                  className="flex-[1_1_calc(25%-0.375rem)] justify-center text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-100 py-2 rounded-lg flex items-center gap-1 font-bold transition-colors border border-slate-700 shadow-sm"
+                >
+                  <MonitorSmartphone className="w-3 h-3 hidden sm:block" />
+                  <span>{d}%</span>
+                </button>
+              ))}
+          </div>
         </div>
-        <button 
-          onClick={handleCopyLink}
-          className="w-full sm:hidden flex justify-center text-sm bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-2.5 rounded-xl items-center gap-2 font-bold transition-colors border border-indigo-400 shadow-sm mb-2"
-        >
-          <Share2 className="w-4 h-4" />
-          <span>Salin Link Brosur</span>
-        </button>
         <div className="grid grid-cols-2 lg:flex lg:flex-wrap bg-indigo-700/50 p-1 rounded-lg w-full xl:w-auto gap-1">
           <button 
             onClick={() => setActiveTab('list')}

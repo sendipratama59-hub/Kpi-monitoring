@@ -466,10 +466,17 @@ export function CustomerAnalysis() {
   const [productCompFilter, setProductCompFilter] = useState<'all' | 'up' | 'down'>('all');
   const [selectedProductCompCategories, setSelectedProductCompCategories] = useState<string[]>([]);
   const [showCompCatDropdown, setShowCompCatDropdown] = useState(false);
+  const [selectedProductCompBrands, setSelectedProductCompBrands] = useState<string[]>([]);
+  const [showCompBrandDropdown, setShowCompBrandDropdown] = useState(false);
 
   const availableProductCompCats = useMemo(() => {
     if (!orders.length) return [];
     return Array.from(new Set(orders.map(o => (o.category || '').toLowerCase()).filter(Boolean))).sort();
+  }, [orders]);
+
+  const availableProductCompBrands = useMemo(() => {
+    if (!orders.length) return [];
+    return Array.from(new Set(orders.map(o => (o.brand_name || '').toLowerCase()).filter(Boolean))).sort();
   }, [orders]);
 
   const productComparison = useMemo(() => {
@@ -483,6 +490,7 @@ export function CustomerAnalysis() {
     const productMap = new Map<string, {
       goods_name: string,
       category: string,
+      brand_name: string,
       qty0: number, omset0: number,
       qty1: number, omset1: number,
       qty2: number, omset2: number,
@@ -502,6 +510,7 @@ export function CustomerAnalysis() {
       const qty = Number(order.qty) || 0;
       const amount = Number(order.total_amount) || 0;
       const cat = (order.category || '').toLowerCase();
+      const brand = (order.brand_name || '').toLowerCase();
       
       let finalQty = Number(order.qty) || 0;
       if (cat === 'front film' && order.hydrogel_pcs != null) {
@@ -514,6 +523,7 @@ export function CustomerAnalysis() {
         productMap.set(name, {
           goods_name: name,
           category: cat,
+          brand_name: brand,
           qty0: 0, omset0: 0,
           qty1: 0, omset1: 0,
           qty2: 0, omset2: 0
@@ -530,6 +540,9 @@ export function CustomerAnalysis() {
     
     if (selectedProductCompCategories.length > 0) {
       result = result.filter(p => selectedProductCompCategories.includes(p.category));
+    }
+    if (selectedProductCompBrands.length > 0) {
+      result = result.filter(p => selectedProductCompBrands.includes(p.brand_name));
     }
 
     if (productCompFilter === 'up') {
@@ -553,7 +566,7 @@ export function CustomerAnalysis() {
     });
 
     return result;
-  }, [orders, productCompFilter, selectedProductCompCategories]);
+  }, [orders, productCompFilter, selectedProductCompCategories, selectedProductCompBrands]);
 
   const downloadProductComparisonPDF = async () => {
     setIsDownloadingPdf(true);
@@ -581,6 +594,13 @@ export function CustomerAnalysis() {
       if (productCompFilter === 'down') filterText = 'TURUN (Decline)';
       else if (productCompFilter === 'up') filterText = 'NAIK (Growth)';
       else filterText = 'Semua Produk';
+      
+      if (selectedProductCompCategories.length > 0) {
+         filterText += ` | Kat: ${selectedProductCompCategories.join(', ')}`;
+      }
+      if (selectedProductCompBrands.length > 0) {
+         filterText += ` | Brand: ${selectedProductCompBrands.join(', ')}`;
+      }
       
       doc.setTextColor(220, 38, 38);
       doc.text(`Filter: ${filterText}`, 14, 31);
@@ -667,7 +687,19 @@ export function CustomerAnalysis() {
         }
       });
 
-      doc.save(`DETAIL_PRODUK_${selectedCust || 'ALL'}_${month0}.pdf`);
+      let fileNamePrefix = 'Detail_Produk';
+      if (productCompFilter === 'down') fileNamePrefix = 'Penurunan';
+      else if (productCompFilter === 'up') fileNamePrefix = 'Kenaikan';
+
+      let fileNameBrand = selectedProductCompBrands.length > 0 
+        ? selectedProductCompBrands.join('_').toUpperCase()
+        : '';
+      
+      let fileNameBase = [fileNamePrefix, fileNameBrand].filter(Boolean).join('_');
+      let custNameStr = (selectedCust || 'ALL').replace(/\s+/g, '_');
+      let finalFileName = `${fileNameBase}_${custNameStr}_${month0.replace(/\s+/g, '_')}.pdf`;
+
+      doc.save(finalFileName);
     } catch (e) {
       console.error('Error generating PDF', e);
     } finally {
@@ -973,6 +1005,46 @@ export function CustomerAnalysis() {
                           })}
                           {availableProductCompCats.length === 0 && (
                             <div className="p-2 text-xs text-slate-400 text-center">Tidak ada kategori</div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowCompBrandDropdown(!showCompBrandDropdown)}
+                      className="px-3 py-1.5 h-8 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-[10px] font-bold text-slate-600 shadow-sm flex items-center justify-between"
+                    >
+                      Brand {selectedProductCompBrands.length > 0 ? `(${selectedProductCompBrands.length})` : '(Semua)'}
+                      <ChevronDown className="w-3 h-3 ml-2" />
+                    </button>
+                    {showCompBrandDropdown && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowCompBrandDropdown(false)} />
+                        <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 max-h-60 overflow-y-auto">
+                          {availableProductCompBrands.map(brand => {
+                            const isChecked = selectedProductCompBrands.includes(brand);
+                            return (
+                              <label key={brand} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 cursor-pointer text-xs rounded-md">
+                                <input
+                                  type="checkbox"
+                                  className="rounded text-indigo-600 focus:ring-indigo-500"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    if (isChecked) {
+                                      setSelectedProductCompBrands(prev => prev.filter(c => c !== brand));
+                                    } else {
+                                      setSelectedProductCompBrands(prev => [...prev, brand]);
+                                    }
+                                  }}
+                                />
+                                <span className={isChecked ? 'font-bold text-indigo-700' : 'text-slate-600'}>{brand.toUpperCase() || 'Tidak Ada Brand'}</span>
+                              </label>
+                            );
+                          })}
+                          {availableProductCompBrands.length === 0 && (
+                            <div className="p-2 text-xs text-slate-400 text-center">Tidak ada brand</div>
                           )}
                         </div>
                       </>

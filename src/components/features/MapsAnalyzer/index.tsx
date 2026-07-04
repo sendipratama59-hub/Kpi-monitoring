@@ -11,7 +11,11 @@ import { PricingInfoModal } from './components/PricingInfoModal';
 import SurveyLcd from '../SurveyLcd';
 import * as XLSX from 'xlsx';
 
-export default function MapsAnalyzer() {
+interface MapsAnalyzerProps {
+  isMobilePreviewOnly?: boolean;
+}
+
+export default function MapsAnalyzer({ isMobilePreviewOnly = false }: MapsAnalyzerProps = {}) {
   const [mapsLink, setMapsLink] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -387,7 +391,7 @@ export default function MapsAnalyzer() {
       while (hasMoreSurveys) {
         const { data, error } = await supabase
           .from('survey_lcd')
-          .select('*')
+          .select('id,salesman_code,nama_salesman,nama_toko,no_telp,brand_lcd,qty_lcd,omset_lcd,order_lcd_dari,brand_baterai,qty_baterai,omset_baterai,order_baterai_dari,latitude,longitude,alamat_asli,created_at')
           // Removed order to avoid timeout
           .range(fromSurveys, fromSurveys + limit - 1);
           
@@ -1176,13 +1180,16 @@ export default function MapsAnalyzer() {
     XLSX.writeFile(wb, fileName);
   };
 
-  const buildHtml = () => {
-    if (filteredData.length === 0) {
-      showAlert('Tidak ada data untuk didownload', 'warning');
+  const buildHtml = (exportAll = false) => {
+    const targetData = (exportAll || isMobilePreviewOnly) ? dataWithDistances : filteredData;
+    if (targetData.length === 0) {
+      if (!isMobilePreviewOnly) {
+        showAlert('Tidak ada data untuk didownload', 'warning');
+      }
       return null;
     }
 
-    const initialData = filteredData.map(item => {
+    const initialData = targetData.map(item => {
       const storeNameLower = (item.nama_customer || '').toLowerCase().trim();
       const storeSurveys = allSurveyData.filter(s => s.nama_toko && s.nama_toko.toLowerCase().trim() === storeNameLower);
       
@@ -1214,7 +1221,10 @@ export default function MapsAnalyzer() {
            brand_baterai: latestSurvey.brand_baterai || '-',
            qty_baterai: latestSurvey.qty_baterai || '0',
            omset_baterai: latestSurvey.omset_baterai || '0',
-        } : null
+        } : null,
+        rating: item.rating || null,
+        user_rating_count: item.user_rating_count || null,
+        place_type: item.place_type || null
       };
     });
 
@@ -1255,86 +1265,58 @@ export default function MapsAnalyzer() {
     </div>
   </div>
 
-  <!-- Fixed Top Header -->
-  <div class="sticky top-0 z-40 bg-white shadow-sm px-4 py-3">
-    <div class="flex justify-between items-center mb-3">
-      <h1 class="text-xl font-bold text-indigo-700"><i class="fa-solid fa-map-location-dot mr-2"></i>Database Customer LCD</h1>
-      <span class="text-xs text-slate-500 font-medium" id="lastSyncTime">Sync: -</span>
-    </div>
-    
-    <div class="flex gap-2 mb-3">
-      <button id="refreshLocBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[11px] sm:text-sm font-semibold py-2.5 rounded-xl flex items-center justify-center gap-1 sm:gap-2 transition-colors">
-        <i class="fa-solid fa-location-crosshairs"></i> Refresh <span class="loader hidden w-4 h-4 border-2" id="locLoader"></span>
-      </button>
-      <button id="syncDbBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[11px] sm:text-sm font-semibold py-2.5 rounded-xl flex items-center justify-center gap-1 sm:gap-2 transition-colors">
-        <i class="fa-solid fa-cloud-arrow-down"></i> Sync DB <span class="loader hidden w-4 h-4 border-2" id="syncLoader"></span>
-      </button>
-    </div>
-
-    <div class="relative">
-      <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
-      <input type="text" id="searchInput" class="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Cari apa saja...">
-    </div>
-    <div id="searchCountContainer" class="hidden text-xs font-semibold text-slate-500 mt-2 px-1">
-      Menampilkan <span id="searchCount" class="text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">0</span> toko
-    </div>
-    
-    <!-- Compass Block (Hidden untill loc refresh) -->
-    <div id="compassContainer" class="hidden mt-3 mb-1">
-      <div class="flex items-center justify-between mb-2 px-1">
-         <div class="text-xs font-bold text-slate-500 uppercase tracking-widest">Filter Arah</div>
-         <button onclick="window.requestCompass()" class="text-indigo-600 font-bold text-[10px] sm:text-xs flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg border border-indigo-200 transition-colors shadow-sm">
-            <i class="fa-regular fa-compass"></i>
-            <span>Sensor Arah Utara:</span>
-            <div class="w-5 h-5 bg-white rounded-full flex items-center justify-center border border-indigo-200 shadow-sm ml-0.5">
-               <i id="northArrow" class="fa-solid fa-arrow-up leading-none text-indigo-500 transition-transform duration-200" style="transform: rotate(0deg); transform-origin: center;"></i>
-            </div>
-         </button>
-      </div>
-      <div class="grid grid-cols-4 gap-2">
-        <button onclick="window.filterDirection('Utara')" class="flex flex-col items-center justify-center py-2 rounded-xl bg-orange-50 border border-orange-100 text-orange-700 hover:bg-orange-100 transition-colors shadow-sm relative overflow-hidden">
-           <i class="fa-solid fa-arrow-up text-orange-400/50 absolute top-1.5 right-1.5 text-xs"></i>
-           <span class="text-[10px] font-bold uppercase mb-0.5 relative z-10 text-orange-800">Utara</span>
-           <span class="text-sm font-black relative z-10" id="dirCountUtara">0</span>
-        </button>
-        <button onclick="window.filterDirection('Timur')" class="flex flex-col items-center justify-center py-2 rounded-xl bg-cyan-50 border border-cyan-100 text-cyan-700 hover:bg-cyan-100 transition-colors shadow-sm relative overflow-hidden">
-           <i class="fa-solid fa-arrow-right text-cyan-400/50 absolute top-1.5 right-1.5 text-xs"></i>
-           <span class="text-[10px] font-bold uppercase mb-0.5 relative z-10 text-cyan-800">Timur</span>
-           <span class="text-sm font-black relative z-10" id="dirCountTimur">0</span>
-        </button>
-        <button onclick="window.filterDirection('Selatan')" class="flex flex-col items-center justify-center py-2 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 hover:bg-rose-100 transition-colors shadow-sm relative overflow-hidden">
-           <i class="fa-solid fa-arrow-down text-rose-400/50 absolute top-1.5 right-1.5 text-xs"></i>
-           <span class="text-[10px] font-bold uppercase mb-0.5 relative z-10 text-rose-800">Selatan</span>
-           <span class="text-sm font-black relative z-10" id="dirCountSelatan">0</span>
-        </button>
-        <button onclick="window.filterDirection('Barat')" class="flex flex-col items-center justify-center py-2 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 hover:bg-emerald-100 transition-colors shadow-sm relative overflow-hidden">
-           <i class="fa-solid fa-arrow-left text-emerald-400/50 absolute top-1.5 right-1.5 text-xs"></i>
-           <span class="text-[10px] font-bold uppercase mb-0.5 relative z-10 text-emerald-800">Barat</span>
-           <span class="text-sm font-black relative z-10" id="dirCountBarat">0</span>
-        </button>
-      </div>
-      <div id="activeDirectionFilterBlock" class="hidden items-center justify-between text-xs font-bold bg-slate-800 text-white px-3 py-2 rounded-lg mt-2 shadow-sm">
-        <span><i class="fa-solid fa-compass mr-1.5"></i> Arah: <span id="activeDirName" class="text-amber-400">Utara</span> - <span id="activeDirCount" class="font-normal text-slate-300">0</span> toko</span>
-        <button onclick="window.clearDirectionFilter()" class="text-slate-300 hover:text-white border border-slate-600 hover:border-slate-400 rounded px-2 py-1"><i class="fa-solid fa-xmark"></i> Tutup</button>
-      </div>
-      <div id="activeRouteFilterBlock" class="hidden items-center justify-between text-xs font-bold bg-indigo-800 text-white px-3 py-2 rounded-lg mt-2 shadow-sm">
-        <div class="flex flex-col">
-           <span><i class="fa-solid fa-route mr-1.5 text-indigo-300"></i> Searah menuju:</span>
-           <span id="activeRouteName" class="text-indigo-200 mt-0.5 line-clamp-1">Tujuan</span>
-           <span class="font-normal text-slate-300 mt-0.5"><span id="activeRouteCount">0</span> toko searah (< 3km)</span>
+  <!-- Fixed Top Header & Tabs Wrapper -->
+  <div class="sticky top-0 z-40 bg-white shadow-sm flex flex-col">
+    <!-- Header Content -->
+    <div class="px-3 py-2">
+      <div class="flex justify-between items-center mb-2">
+        <h1 class="text-sm sm:text-base font-bold text-indigo-700 flex items-center gap-1 line-clamp-1"><i class="fa-solid fa-map-location-dot mr-1"></i>Database Customer LCD</h1>
+        <div class="flex items-center gap-2 whitespace-nowrap">
+           <span class="text-[10px] text-slate-500 font-medium" id="lastSyncTime">Sync: -</span>
+           <button id="logoutBtn" class="text-rose-600 hover:text-rose-800 bg-rose-50 border border-rose-100 p-1 rounded-md text-xs hidden" onclick="window.logoutSalesman()" title="Logout">
+              <i class="fa-solid fa-right-from-bracket"></i>
+           </button>
         </div>
-        <button onclick="window.clearRouteFilter()" class="text-indigo-200 hover:text-white border border-indigo-600 hover:border-indigo-400 rounded px-2 py-1 ml-2"><i class="fa-solid fa-xmark"></i> Tutup</button>
+      </div>
+      
+      <div class="flex gap-2 mb-2">
+        <button id="refreshLocBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[11px] font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1 transition-colors">
+          <i class="fa-solid fa-location-crosshairs"></i> Refresh <span class="loader hidden w-3 h-3 border-2" id="locLoader"></span>
+        </button>
+        <button id="syncDbBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[11px] font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1 transition-colors">
+          <i class="fa-solid fa-cloud-arrow-down"></i> Sync DB <span class="loader hidden w-3 h-3 border-2" id="syncLoader"></span>
+        </button>
+      </div>
+
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 text-xs"></i>
+        <input type="text" id="searchInput" class="w-full pl-7 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Cari apa saja...">
+      </div>
+      <div id="searchCountContainer" class="hidden text-[10px] font-semibold text-slate-500 mt-1 px-1">
+        Menampilkan <span id="searchCount" class="text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">0</span> toko
+      </div>
+      
+      <!-- Route Filter Block (Hidden untill route filter is active) -->
+      <div id="compassContainer" class="hidden mt-2 mb-1">
+        <div id="activeRouteFilterBlock" class="hidden items-center justify-between text-[10px] font-bold bg-indigo-800 text-white px-2 py-1.5 rounded-lg shadow-sm">
+          <div class="flex flex-col">
+             <span><i class="fa-solid fa-route mr-1 text-indigo-300"></i> Searah menuju:</span>
+             <span id="activeRouteName" class="text-indigo-200 mt-0.5 line-clamp-1">Tujuan</span>
+             <span class="font-normal text-slate-300 mt-0.5"><span id="activeRouteCount">0</span> toko searah (< 3km)</span>
+          </div>
+          <button onclick="window.clearRouteFilter()" class="text-indigo-200 hover:text-white border border-indigo-600 hover:border-indigo-400 rounded px-2 py-1 ml-2"><i class="fa-solid fa-xmark"></i></button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- Tabs -->
-  <div class="bg-white border-b sticky top-[135px] sm:top-[124px] z-30 shadow-sm overflow-x-auto no-scrollbar" id="tabContainerOuter">
-    <div class="flex px-3 py-2.5 gap-2 w-max" id="tabContainer">
-      <button data-tab="semua" class="tab-btn active bg-indigo-100 text-indigo-700 border-indigo-200 border px-4 py-1.5 rounded-full text-sm font-semibold transition-colors">Semua</button>
-      <button data-tab="rencana" class="tab-btn bg-white text-slate-600 border-slate-200 border hover:bg-slate-50 px-4 py-1.5 rounded-full text-sm font-medium transition-colors">Rencana Hari Ini</button>
-      <button data-tab="belum" class="tab-btn bg-white text-slate-600 border-slate-200 border hover:bg-slate-50 px-4 py-1.5 rounded-full text-sm font-medium transition-colors">Belum Dikunjungi</button>
-      <button data-tab="sudah" class="tab-btn bg-white text-slate-600 border-slate-200 border hover:bg-slate-50 px-4 py-1.5 rounded-full text-sm font-medium transition-colors">Riwayat (Sudah)</button>
+    <!-- Tabs -->
+    <div class="bg-white border-t border-b overflow-x-auto no-scrollbar" id="tabContainerOuter">
+      <div class="flex px-3 py-2 gap-2 w-max" id="tabContainer">
+        <button data-tab="semua" class="tab-btn active bg-indigo-100 text-indigo-700 border-indigo-200 border px-3 py-1 rounded-full text-xs font-semibold transition-colors">Semua</button>
+        <button data-tab="rencana" class="tab-btn bg-white text-slate-600 border-slate-200 border hover:bg-slate-50 px-3 py-1 rounded-full text-xs font-medium transition-colors">Rencana Hari Ini</button>
+        <button data-tab="belum" class="tab-btn bg-white text-slate-600 border-slate-200 border hover:bg-slate-50 px-3 py-1 rounded-full text-xs font-medium transition-colors">Belum Dikunjungi</button>
+        <button data-tab="sudah" class="tab-btn bg-white text-slate-600 border-slate-200 border hover:bg-slate-50 px-3 py-1 rounded-full text-xs font-medium transition-colors">Riwayat (Sudah)</button>
+      </div>
     </div>
   </div>
 
@@ -1458,8 +1440,30 @@ export default function MapsAnalyzer() {
        if (savedSalesman) {
           activeSalesman = JSON.parse(savedSalesman);
           document.getElementById('loginScreen').style.display = 'none';
+          document.getElementById('logoutBtn').classList.remove('hidden');
        }
     });
+
+    window.logoutSalesman = function() {
+       Swal.fire({
+          title: 'Konfirmasi Keluar',
+          text: 'Yakin ingin logout / keluar akun?',
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Ya, Keluar',
+          cancelButtonText: 'Batal',
+          confirmButtonColor: '#ef4444'
+       }).then((res) => {
+          if (res.isConfirmed) {
+             localStorage.removeItem('mapsAnalyzerSalesman');
+             activeSalesman = null;
+             document.getElementById('loginScreen').style.display = 'flex';
+             document.getElementById('loginScreen').style.opacity = '1';
+             document.getElementById('logoutBtn').classList.add('hidden');
+             document.getElementById('salesmanCodeInput').value = '';
+          }
+       });
+    };
 
     document.getElementById('loginBtn').addEventListener('click', async () => {
        const code = document.getElementById('salesmanCodeInput').value.trim();
@@ -1480,7 +1484,10 @@ export default function MapsAnalyzer() {
              activeSalesman = { code: fetchedData[0].salesman_code, name: fetchedData[0].salesman_name };
              localStorage.setItem('mapsAnalyzerSalesman', JSON.stringify(activeSalesman));
              document.getElementById('loginScreen').style.opacity = '0';
-             setTimeout(() => document.getElementById('loginScreen').style.display = 'none', 300);
+             setTimeout(() => {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('logoutBtn').classList.remove('hidden');
+             }, 300);
           } else if (fetchedData && fetchedData.message) {
              Swal.fire('Error Database', 'Gagal memverifikasi: ' + fetchedData.message, 'error');
           } else {
@@ -1625,28 +1632,47 @@ export default function MapsAnalyzer() {
           }
        });
        
-       document.getElementById('dirCountUtara').textContent = counts.Utara;
-       document.getElementById('dirCountTimur').textContent = counts.Timur;
-       document.getElementById('dirCountSelatan').textContent = counts.Selatan;
-       document.getElementById('dirCountBarat').textContent = counts.Barat;
-       document.getElementById('compassContainer').classList.remove('hidden');
+       const dUtara = document.getElementById('dirCountUtara');
+       if (dUtara) dUtara.textContent = counts.Utara;
+       const dTimur = document.getElementById('dirCountTimur');
+       if (dTimur) dTimur.textContent = counts.Timur;
+       const dSelatan = document.getElementById('dirCountSelatan');
+       if (dSelatan) dSelatan.textContent = counts.Selatan;
+       const dBarat = document.getElementById('dirCountBarat');
+       if (dBarat) dBarat.textContent = counts.Barat;
+       
+       const compCont = document.getElementById('compassContainer');
+       if (compCont) {
+          if (activeRouteFilter) {
+             compCont.classList.remove('hidden');
+          } else {
+             compCont.classList.add('hidden');
+          }
+       }
        
        appData.sort((a, b) => (a.distance || 999999) - (b.distance || 999999));
     }
 
     window.filterDirection = function(dir) {
        activeDirectionFilter = dir;
-       document.getElementById('activeDirName').textContent = dir;
-       document.getElementById('activeDirectionFilterBlock').classList.remove('hidden');
-       document.getElementById('activeDirectionFilterBlock').classList.add('flex');
+       const activeDirNameEl = document.getElementById('activeDirName');
+       if (activeDirNameEl) activeDirNameEl.textContent = dir;
+       const activeDirectionFilterBlockEl = document.getElementById('activeDirectionFilterBlock');
+       if (activeDirectionFilterBlockEl) {
+          activeDirectionFilterBlockEl.classList.remove('hidden');
+          activeDirectionFilterBlockEl.classList.add('flex');
+       }
        currentPage = 1;
        renderList();
     };
 
     window.clearDirectionFilter = function() {
        activeDirectionFilter = null;
-       document.getElementById('activeDirectionFilterBlock').classList.add('hidden');
-       document.getElementById('activeDirectionFilterBlock').classList.remove('flex');
+       const activeDirectionFilterBlockEl = document.getElementById('activeDirectionFilterBlock');
+       if (activeDirectionFilterBlockEl) {
+          activeDirectionFilterBlockEl.classList.add('hidden');
+          activeDirectionFilterBlockEl.classList.remove('flex');
+       }
        currentPage = 1;
        renderList();
     };
@@ -1666,10 +1692,16 @@ export default function MapsAnalyzer() {
        document.getElementById('activeRouteFilterBlock').classList.remove('hidden');
        document.getElementById('activeRouteFilterBlock').classList.add('flex');
        
+       const compCont = document.getElementById('compassContainer');
+       if (compCont) compCont.classList.remove('hidden');
+       
        // clearing other filters
        activeDirectionFilter = null;
-       document.getElementById('activeDirectionFilterBlock').classList.add('hidden');
-       document.getElementById('activeDirectionFilterBlock').classList.remove('flex');
+       const activeDirectionFilterBlockEl = document.getElementById('activeDirectionFilterBlock');
+       if (activeDirectionFilterBlockEl) {
+          activeDirectionFilterBlockEl.classList.add('hidden');
+          activeDirectionFilterBlockEl.classList.remove('flex');
+       }
        
        searchQuery = "";
        const searchInputEl = document.getElementById('searchInput');
@@ -1695,6 +1727,10 @@ export default function MapsAnalyzer() {
        activeRouteFilter = null;
        document.getElementById('activeRouteFilterBlock').classList.add('hidden');
        document.getElementById('activeRouteFilterBlock').classList.remove('flex');
+       
+       const compCont = document.getElementById('compassContainer');
+       if (compCont) compCont.classList.add('hidden');
+       
        currentPage = 1;
        renderList();
     };
@@ -1870,6 +1906,16 @@ export default function MapsAnalyzer() {
               
               <div class="pr-20 mb-3">
                  <h3 class="font-bold text-slate-800 text-[17px] leading-tight mb-1">\${item.nama_customer}</h3>
+                 \${item.rating ? \`
+                 <div class="flex items-center gap-1.5 mt-0.5 mb-1.5 text-xs text-slate-500">
+                    <span class="flex items-center gap-0.5 font-bold text-amber-500">
+                       \${item.rating}
+                       <i class="fa-solid fa-star text-amber-400"></i>
+                       \${item.user_rating_count ? '(' + item.user_rating_count + ')' : ''}
+                    </span>
+                    \${item.place_type ? '<span class="text-slate-300">•</span> <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded-full">' + item.place_type + '</span>' : ''}
+                 </div>
+                 \` : ''}
                  <p class="text-xs text-slate-500 truncate flex items-center gap-1.5"><i class="fa-solid fa-location-dot w-3 text-center"></i> \${item.kecamatan_kota}</p>
               </div>
               
@@ -2409,6 +2455,36 @@ export default function MapsAnalyzer() {
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
+
+  if (isMobilePreviewOnly) {
+    if (loadingSaved) {
+      return (
+        <div className="flex flex-col items-center justify-center p-12 min-h-[50vh]">
+          <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
+          <p className="text-sm font-bold text-slate-600">Memuat database customer...</p>
+        </div>
+      );
+    }
+    
+    const html = buildHtml(true);
+    if (!html) {
+      return (
+        <div className="p-6 text-center text-slate-500">
+          Belum ada data customer dalam database. Silakan hubungi Admin untuk mengisi data lokasi.
+        </div>
+      );
+    }
+
+    return (
+      <div className="w-full h-[calc(100vh-140px)] sm:h-[75vh] rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-white relative">
+        <iframe 
+          srcDoc={html} 
+          className="absolute inset-0 w-full h-full border-0" 
+          title="Database Customer LCD"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mb-20 w-full space-y-6">

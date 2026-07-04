@@ -76,7 +76,7 @@ const DEFAULT_LAYOUT = [
   'ORDER_HISTORY'
 ];
 
-export function CustomerAnalysis() {
+export function CustomerAnalysis({ isMobile = false }: { isMobile?: boolean }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCust, setSelectedCust] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -106,16 +106,25 @@ export function CustomerAnalysis() {
 
   const fetchCustomers = async () => {
     try {
+      const userRole = localStorage.getItem("user_role") || "admin";
+      const salesmanCode = localStorage.getItem("salesman_code");
+      
       let allCustomers: Customer[] = [];
       let from = 0;
       let hasMore = true;
       
       while (hasMore) {
-        const { data, error } = await supabase
+        let query = supabase
           .from('salesman_customer')
           .select('customer_code, customer_name')
           .order('customer_name')
           .range(from, from + 999);
+        
+        if (userRole === 'salesman' && salesmanCode && salesmanCode !== '81457') {
+          query = query.eq('salesman_code', salesmanCode);
+        }
+        
+        const { data, error } = await query;
         
         if (error) throw error;
         
@@ -131,7 +140,17 @@ export function CustomerAnalysis() {
         }
       }
       
-      setCustomers(allCustomers);
+      // Deduplicate by customer_code to ensure each customer only appears once in the dropdown/search
+      const uniqueCustomers: Customer[] = [];
+      const seen = new Set<string>();
+      for (const c of allCustomers) {
+        if (c.customer_code && !seen.has(c.customer_code)) {
+          seen.add(c.customer_code);
+          uniqueCustomers.push(c);
+        }
+      }
+      
+      setCustomers(uniqueCustomers);
     } catch (err) {
       console.error(err);
     }

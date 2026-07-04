@@ -62,7 +62,7 @@ export function ManualKpiLogger({
       }
       setHasMore((data || []).length === 20);
     } catch (err) {
-      console.error(err);
+      console.warn("Error fetching customers:", err);
     } finally {
       setIsLoading(false);
     }
@@ -103,7 +103,7 @@ export function ManualKpiLogger({
       setSearch('');
       onSave();
     } catch (err) {
-      console.error(err);
+      console.warn("Error saving KPI activity:", err);
       showAlert('Gagal menyimpan data.', 'error');
     } finally {
       setIsSaving(false);

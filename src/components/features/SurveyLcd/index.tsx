@@ -46,7 +46,7 @@ export default function SurveyLcd({ initialData, onClose }: { initialData?: any,
 
       while (hasMore) {
         const { data, error } = await supabase.from('survey_lcd')
-          .select('*')
+          .select('id,salesman_code,nama_salesman,nama_toko,no_telp,brand_lcd,qty_lcd,omset_lcd,order_lcd_dari,brand_baterai,qty_baterai,omset_baterai,order_baterai_dari,latitude,longitude,alamat_asli,created_at')
           .order('created_at', { ascending: false })
           .range(page * 1000, (page + 1) * 1000 - 1);
         if (error) throw error;
@@ -244,7 +244,7 @@ export default function SurveyLcd({ initialData, onClose }: { initialData?: any,
     setLoading(true);
     try {
       let error;
-      const payload = {
+      const payload: any = {
         ...formData,
       };
       // only update foto_toko if changed/new

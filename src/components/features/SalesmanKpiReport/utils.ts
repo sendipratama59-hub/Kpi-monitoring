@@ -18,6 +18,8 @@ export const getStoresForKpi = (salesmanData: any[], kpiId: string) => {
         is_co_3c: false,
         is_new_customer: false,
         is_idle_customer: false,
+        omset_new_customer: 0,
+        omset_idle: 0,
         is_co_mesin_vqm: false,
         is_co_tg: false,
         is_omset_5jt: false,
@@ -83,8 +85,8 @@ export const getStoresForKpi = (salesmanData: any[], kpiId: string) => {
     // 1. Payment 3C (Vivan, Robot, Acome ACC, Acome IOT, Gamen)
     const brandsPayment3C = ['vivan', 'robot', 'acome acc', 'acome iot', 'gamen'];
     
-    // 2. Customer Order > 5jt, 3C, Idle, NOO (Vivan, Robot, Acome ACC, Acome IOT, Gamen, Aula, Philips, DP)
-    const brandsGeneral = ['vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'philips', 'dp'];
+    // 2. Customer Order > 5jt, 3C, Idle, NOO (Vivan, Robot, Acome ACC, Acome IOT, Gamen, Aula, Philips, XPAS)
+    const brandsGeneral = ['vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'philips', 'xpas'];
     
     const validLcdCats = ['vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部'];
     const isLcdTeamCategory = (brand === 'vivan' || brand === 'xpas') && validLcdCats.includes(category);
@@ -123,8 +125,15 @@ export const getStoresForKpi = (salesmanData: any[], kpiId: string) => {
     
     // 2. New & Idle Customer: Only count if associated with those 8 brands
     if (brandsGeneral.includes(brand) && !isLcdTeamCategory) {
-       if ((Number(row.new_customer) || 0) > 0) st.is_new_customer = true;
-       if ((Number(row.idle_customer) || 0) > 0) st.is_idle_customer = true;
+       st.omset_new_customer += Number(row.total_amount) || 0;
+       st.omset_idle += Number(row.total_amount) || 0;
+
+       if ((Number(row.new_customer) || 0) > 0) {
+         st.is_new_customer = true;
+       }
+       if ((Number(row.idle_customer) || 0) > 0) {
+         st.is_idle_customer = true;
+       }
     }
     
     if ((Number(row.co_mesin_vqm) || 0) > 0) st.is_co_mesin_vqm = true;
@@ -215,16 +224,16 @@ export const getStoresForKpi = (salesmanData: any[], kpiId: string) => {
          if (st.is_new_customer) { 
            isIncluded = true; 
            value = 1; 
-           sortValue = st.total_revenue;
-           displayValue = formatCurr(st.total_revenue);
+           sortValue = st.omset_new_customer;
+           displayValue = formatCurr(st.omset_new_customer);
          }
          break;
       case 'idle_customers': 
          if (st.is_idle_customer) { 
            isIncluded = true; 
            value = 1; 
-           sortValue = st.total_revenue;
-           displayValue = formatCurr(st.total_revenue);
+           sortValue = st.omset_idle;
+           displayValue = formatCurr(st.omset_idle);
          }
          break;
       case 'co_mesin_vqm': 

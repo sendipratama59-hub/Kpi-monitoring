@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../services/supabase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { Loader2, Trash2, Save, FileSpreadsheet, Target, Users, Search, X, Check, Edit2, RefreshCw, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Loader2, Trash2, Save, FileSpreadsheet, Target, Users, Search, X, Check, Edit2, RefreshCw, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Plus } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useAlert } from '../ui/AlertModal';
@@ -25,6 +25,11 @@ export function KpiTargetSetup() {
   const [viewMode, setViewMode] = useState<'setup' | 'table'>('setup');
   const [teams, setTeams] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  
+  // Custom Target Form State
+  const [addingCustomTargetIdx, setAddingCustomTargetIdx] = useState<number | null>(null);
+  const [newCustomTargetName, setNewCustomTargetName] = useState('');
+  const [newCustomTargetValue, setNewCustomTargetValue] = useState('');
   
   // Mass Edit Modal State
   const [isMassEditOpen, setIsMassEditOpen] = useState(false);
@@ -96,7 +101,17 @@ export function KpiTargetSetup() {
       })).sort((a, b) => a.salesman_name.localeCompare(b.salesman_name));
       
       setAvailableSalesmen(uniqueSalesmen);
-      setTargets(targetsData || []);
+      const roundedTargetsData = (targetsData || []).map((t: any) => {
+        const rounded = { ...t };
+        Object.keys(rounded).forEach(key => {
+          if (typeof rounded[key] === 'number') {
+            rounded[key] = Math.round(rounded[key]);
+          }
+        });
+        return rounded;
+      });
+      
+      setTargets(roundedTargetsData);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -187,15 +202,55 @@ export function KpiTargetSetup() {
 
   const handleChange = (index: number, field: string, value: any) => {
     const newTargets = [...targets];
+    
+    // Remove decimals by rounding if it's a number
+    if (typeof value === 'number' && !isNaN(value)) {
+      value = Math.round(value);
+    }
+    
     newTargets[index][field] = value;
 
     // Hitung otomatis jika salah satu komponen penjumlahan berubah
     if (field === 'target_payment_3c' || field === 'target_omset_lcd') {
       const payment3c = Number(newTargets[index].target_payment_3c) || 0;
       const omsetLcd = Number(newTargets[index].target_omset_lcd) || 0;
-      newTargets[index].target_payment_3c_lcd = payment3c + omsetLcd;
+      newTargets[index].target_payment_3c_lcd = Math.round(payment3c + omsetLcd);
     }
 
+    setTargets(newTargets);
+  };
+
+  const handleSaveNewCustomTarget = (index: number) => {
+    if (!newCustomTargetName.trim()) {
+      showAlert('Nama target harus diisi.', 'warning');
+      return;
+    }
+
+    const newTargets = [...targets];
+    if (!newTargets[index].custom_targets) {
+      newTargets[index].custom_targets = [];
+    }
+    
+    newTargets[index].custom_targets.push({ 
+      name: newCustomTargetName.trim(), 
+      value: newCustomTargetValue.trim() 
+    });
+    
+    setTargets(newTargets);
+    setAddingCustomTargetIdx(null);
+    setNewCustomTargetName('');
+    setNewCustomTargetValue('');
+  };
+
+  const handleRemoveCustomTarget = (index: number, customIdx: number) => {
+    const newTargets = [...targets];
+    newTargets[index].custom_targets.splice(customIdx, 1);
+    setTargets(newTargets);
+  };
+
+  const handleCustomTargetChange = (index: number, customIdx: number, value: string) => {
+    const newTargets = [...targets];
+    newTargets[index].custom_targets[customIdx].value = value;
     setTargets(newTargets);
   };
 
@@ -241,7 +296,7 @@ export function KpiTargetSetup() {
       showAlert('Pilih field target yang ingin diubah masal.', 'warning');
       return;
     }
-    const val = Number(massEditValue);
+    const val = Math.round(Number(massEditValue));
     if (isNaN(val)) {
       showAlert('Nilai target tidak valid.', 'error');
       return;
@@ -252,7 +307,7 @@ export function KpiTargetSetup() {
       if (massEditField === 'target_payment_3c' || massEditField === 'target_omset_lcd') {
         const payment3c = Number(updated.target_payment_3c) || 0;
         const omsetLcd = Number(updated.target_omset_lcd) || 0;
-        updated.target_payment_3c_lcd = payment3c + omsetLcd;
+        updated.target_payment_3c_lcd = Math.round(payment3c + omsetLcd);
       }
       return updated;
     });
@@ -288,31 +343,31 @@ export function KpiTargetSetup() {
 
       if (data.length > 0) {
         const mappedTargets = data.map(row => {
-          const payment3c = Number(row.target_payment_3c) || 0;
-          const omsetLcd = Number(row.target_omset_lcd) || 0;
+          const payment3c = Math.round(Number(row.target_payment_3c) || 0);
+          const omsetLcd = Math.round(Number(row.target_omset_lcd) || 0);
           
           return {
             id: crypto.randomUUID(), // Generate ID for new imports
             salesman_code: row.salesman_code || row.kode_salesman || '',
             salesman_name: row.salesman_name || row.nama_salesman || row.salesman || '',
-            target_omset_all_brand: Number(row.target_omset_all_brand) || 0,
+            target_omset_all_brand: Math.round(Number(row.target_omset_all_brand) || 0),
             target_omset_lcd: omsetLcd,
-            target_omset_redskull: Number(row.target_omset_redskull) || 0,
-            target_co_3c: Number(row.target_co_3c) || 0,
-            target_hydrogel_pcs: Number(row.target_hydrogel_pcs) || 0,
-            target_tg_pcs: Number(row.target_tg_pcs) || 0,
-            target_new_customer: Number(row.target_new_customer) || 0,
-            target_idle_customer: Number(row.target_idle_customer) || 0,
-            target_co_mesin_vqm: Number(row.target_co_mesin_vqm) || 0,
-            target_co_tg: Number(row.target_co_tg) || 0,
-            target_omset_5jt: Number(row.target_omset_5jt) || 0,
+            target_omset_redskull: Math.round(Number(row.target_omset_redskull) || 0),
+            target_co_3c: Math.round(Number(row.target_co_3c) || 0),
+            target_hydrogel_pcs: Math.round(Number(row.target_hydrogel_pcs) || 0),
+            target_tg_pcs: Math.round(Number(row.target_tg_pcs) || 0),
+            target_new_customer: Math.round(Number(row.target_new_customer) || 0),
+            target_idle_customer: Math.round(Number(row.target_idle_customer) || 0),
+            target_co_mesin_vqm: Math.round(Number(row.target_co_mesin_vqm) || 0),
+            target_co_tg: Math.round(Number(row.target_co_tg) || 0),
+            target_omset_5jt: Math.round(Number(row.target_omset_5jt) || 0),
             target_payment_3c: payment3c,
-            target_payment_3c_lcd: Number(row.target_payment_3c_lcd) || (payment3c + omsetLcd),
-            target_program_bulanan: Number(row.target_program_bulanan) || 0,
-            target_spu: Number(row.target_spu) || 0,
-            target_perbaikan_display: Number(row.target_perbaikan_display) || 0,
-            target_pemasangan_spanduk: Number(row.target_pemasangan_spanduk) || 0,
-            target_visit_customer: Number(row.target_visit_customer) || 0
+            target_payment_3c_lcd: Math.round(Number(row.target_payment_3c_lcd)) || (payment3c + omsetLcd),
+            target_program_bulanan: Math.round(Number(row.target_program_bulanan) || 0),
+            target_spu: Math.round(Number(row.target_spu) || 0),
+            target_perbaikan_display: Math.round(Number(row.target_perbaikan_display) || 0),
+            target_pemasangan_spanduk: Math.round(Number(row.target_pemasangan_spanduk) || 0),
+            target_visit_customer: Math.round(Number(row.target_visit_customer) || 0)
           };
         }).filter(t => t.salesman_code);
 
@@ -693,67 +748,67 @@ export function KpiTargetSetup() {
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                                 
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Omset All Brand (Rp)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Total Omset All Brand</label>
                                   <input type="number" value={t.target_omset_all_brand} onChange={(e) => handleChange(idx, 'target_omset_all_brand', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
                                 
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Omset LCD (Rp)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">SD LCD</label>
                                   <input type="number" value={t.target_omset_lcd} onChange={(e) => handleChange(idx, 'target_omset_lcd', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
                                 
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Omset Redskull (Rp)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">REDSKULL</label>
                                   <input type="number" value={t.target_omset_redskull} onChange={(e) => handleChange(idx, 'target_omset_redskull', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target NOA 3C (Toko)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Total CO 3C</label>
                                   <input type="number" value={t.target_co_3c} onChange={(e) => handleChange(idx, 'target_co_3c', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Hydrogel (Pcs)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Hydrogel PCS</label>
                                   <input type="number" value={t.target_hydrogel_pcs} onChange={(e) => handleChange(idx, 'target_hydrogel_pcs', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target TG (Pcs)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">TG PCS</label>
                                   <input type="number" value={t.target_tg_pcs} onChange={(e) => handleChange(idx, 'target_tg_pcs', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target NOO (Toko)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">New Customer</label>
                                   <input type="number" value={t.target_new_customer} onChange={(e) => handleChange(idx, 'target_new_customer', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Idle (Toko)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">CO IDLE</label>
                                   <input type="number" value={t.target_idle_customer} onChange={(e) => handleChange(idx, 'target_idle_customer', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target CO Mesin (Toko)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">CO MESIN</label>
                                   <input type="number" value={t.target_co_mesin_vqm} onChange={(e) => handleChange(idx, 'target_co_mesin_vqm', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target CO TG (Toko)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">CO TG</label>
                                   <input type="number" value={t.target_co_tg} onChange={(e) => handleChange(idx, 'target_co_tg', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Omset &gt; 5Jt (Toko)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">CO 5JT</label>
                                   <input type="number" value={t.target_omset_5jt} onChange={(e) => handleChange(idx, 'target_omset_5jt', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Payment 3C (Rp)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Payment 3C</label>
                                   <input type="number" value={t.target_payment_3c} onChange={(e) => handleChange(idx, 'target_payment_3c', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Payment 3C + LCD (Rp)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Payment 3C + SD LCD</label>
                                   <input type="number" value={t.target_payment_3c_lcd} onChange={(e) => handleChange(idx, 'target_payment_3c_lcd', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold bg-slate-50" placeholder="0" readOnly />
                                 </div>
   
@@ -763,24 +818,78 @@ export function KpiTargetSetup() {
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target SPU (SKU)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Program SPU</label>
                                   <input type="number" value={t.target_spu} onChange={(e) => handleChange(idx, 'target_spu', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Perbaikan Display (Toko)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Perbaikan Display</label>
                                   <input type="number" value={t.target_perbaikan_display} onChange={(e) => handleChange(idx, 'target_perbaikan_display', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Pemasangan Spanduk Stiker (Toko)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Pemasangan Spanduk Stiker</label>
                                   <input type="number" value={t.target_pemasangan_spanduk} onChange={(e) => handleChange(idx, 'target_pemasangan_spanduk', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
   
                                 <div className="space-y-1.5">
-                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Target Visit Customer (%)</label>
+                                  <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">Visit Customer</label>
                                   <input type="number" value={t.target_visit_customer} onChange={(e) => handleChange(idx, 'target_visit_customer', Number(e.target.value))} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
                                 </div>
+                                
+                                {t.custom_targets?.map((ct: any, cIdx: number) => (
+                                  <div key={cIdx} className="space-y-1.5 relative group">
+                                    <div className="flex items-center justify-between">
+                                      <label className="text-xs font-semibold text-slate-500 uppercase font-bold tracking-tight">{ct.name}</label>
+                                      <button
+                                        onClick={() => handleRemoveCustomTarget(idx, cIdx)}
+                                        className="text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Hapus Target"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                    <input type="text" value={ct.value} onChange={(e) => handleCustomTargetChange(idx, cIdx, e.target.value)} className="w-full text-sm border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 rounded-md px-3 py-2 transition-all outline-none font-bold" placeholder="0" />
+                                  </div>
+                                ))}
+
+                                {addingCustomTargetIdx === idx ? (
+                                  <div className="space-y-1.5 p-2 bg-indigo-50/50 rounded-lg border border-indigo-100 col-span-1 sm:col-span-2 lg:col-span-1 flex flex-col justify-end">
+                                    <input
+                                      type="text"
+                                      placeholder="Nama Target"
+                                      value={newCustomTargetName}
+                                      onChange={(e) => setNewCustomTargetName(e.target.value)}
+                                      className="w-full text-xs border border-indigo-200 focus:ring-1 focus:ring-indigo-500 rounded-md px-2 py-1.5 outline-none font-bold mb-1"
+                                      autoFocus
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Nilai Target"
+                                      value={newCustomTargetValue}
+                                      onChange={(e) => setNewCustomTargetValue(e.target.value)}
+                                      className="w-full text-xs border border-indigo-200 focus:ring-1 focus:ring-indigo-500 rounded-md px-2 py-1.5 outline-none font-bold mb-1"
+                                    />
+                                    <div className="flex items-center gap-1.5">
+                                      <button onClick={() => handleSaveNewCustomTarget(idx)} className="flex-1 bg-indigo-600 text-white text-[11px] font-bold py-1.5 rounded transition-colors hover:bg-indigo-700">Simpan</button>
+                                      <button onClick={() => setAddingCustomTargetIdx(null)} className="flex-1 bg-slate-200 text-slate-700 text-[11px] font-bold py-1.5 rounded transition-colors hover:bg-slate-300">Batal</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-end pb-0">
+                                    <button
+                                      onClick={() => {
+                                        setAddingCustomTargetIdx(idx);
+                                        setNewCustomTargetName('');
+                                        setNewCustomTargetValue('');
+                                      }}
+                                      className="w-full h-[42px] flex items-center justify-center border-2 border-dashed border-slate-300 hover:border-indigo-500 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-lg transition-colors"
+                                      title="Tambah Target Baru"
+                                    >
+                                      <Plus className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                )}
   
                               </div>
                             </div>
@@ -825,48 +934,48 @@ export function KpiTargetSetup() {
                           group.targets.forEach((t: any) => {
                             exportData.push({
                               'Salesman \\ KPI': `${t.salesman_name} (${t.salesman_code})`,
-                              'Omset All brand': t.target_omset_all_brand,
-                              'Omset LCD': t.target_omset_lcd,
-                              'Omset Redskull': t.target_omset_redskull,
-                              'NOA 3C': t.target_co_3c,
-                              'Hydrogel (pcs)': t.target_hydrogel_pcs,
-                              'TG (pcs)': t.target_tg_pcs,
-                              'NOO': t.target_new_customer,
-                              'Idle': t.target_idle_customer,
-                              'Mesin': t.target_co_mesin_vqm,
+                              'Total Omset All Brand': t.target_omset_all_brand,
+                              'SD LCD': t.target_omset_lcd,
+                              'REDSKULL': t.target_omset_redskull,
+                              'Total CO 3C': t.target_co_3c,
+                              'Hydrogel PCS': t.target_hydrogel_pcs,
+                              'TG PCS': t.target_tg_pcs,
+                              'New Customer': t.target_new_customer,
+                              'CO IDLE': t.target_idle_customer,
+                              'CO MESIN': t.target_co_mesin_vqm,
                               'CO TG': t.target_co_tg,
-                              'CO >5jt': t.target_omset_5jt,
+                              'CO 5JT': t.target_omset_5jt,
                               'Payment 3C': t.target_payment_3c,
-                              'Payment 3C+LCD': t.target_payment_3c_lcd,
+                              'Payment 3C + SD LCD': t.target_payment_3c_lcd,
                               'Program Bulanan': t.target_program_bulanan,
-                              'SPU': t.target_spu,
-                              'Display': t.target_perbaikan_display,
-                              'Spanduk': t.target_pemasangan_spanduk,
-                              'Visit (%)': t.target_visit_customer
+                              'Program SPU': t.target_spu,
+                              'Perbaikan Display': t.target_perbaikan_display,
+                              'Pemasangan Spanduk Stiker': t.target_pemasangan_spanduk,
+                              'Visit Customer': t.target_visit_customer
                             });
                           });
                           
                           // Add Team Total
                           exportData.push({
                             'Salesman \\ KPI': `TOTAL TARGET ${group.teamName}`,
-                            'Omset All brand': group.totals.target_omset_all_brand,
-                            'Omset LCD': group.totals.target_omset_lcd,
-                            'Omset Redskull': group.totals.target_omset_redskull,
-                            'NOA 3C': group.totals.target_co_3c,
-                            'Hydrogel (pcs)': group.totals.target_hydrogel_pcs,
-                            'TG (pcs)': group.totals.target_tg_pcs,
-                            'NOO': group.totals.target_new_customer,
-                            'Idle': group.totals.target_idle_customer,
-                            'Mesin': group.totals.target_co_mesin_vqm,
+                            'Total Omset All Brand': group.totals.target_omset_all_brand,
+                            'SD LCD': group.totals.target_omset_lcd,
+                            'REDSKULL': group.totals.target_omset_redskull,
+                            'Total CO 3C': group.totals.target_co_3c,
+                            'Hydrogel PCS': group.totals.target_hydrogel_pcs,
+                            'TG PCS': group.totals.target_tg_pcs,
+                            'New Customer': group.totals.target_new_customer,
+                            'CO IDLE': group.totals.target_idle_customer,
+                            'CO MESIN': group.totals.target_co_mesin_vqm,
                             'CO TG': group.totals.target_co_tg,
-                            'CO >5jt': group.totals.target_omset_5jt,
+                            'CO 5JT': group.totals.target_omset_5jt,
                             'Payment 3C': group.totals.target_payment_3c,
-                            'Payment 3C+LCD': group.totals.target_payment_3c_lcd,
+                            'Payment 3C + SD LCD': group.totals.target_payment_3c_lcd,
                             'Program Bulanan': group.totals.target_program_bulanan,
-                            'SPU': group.totals.target_spu,
-                            'Display': group.totals.target_perbaikan_display,
-                            'Spanduk': group.totals.target_pemasangan_spanduk,
-                            'Visit (%)': group.totals.target_visit_customer
+                            'Program SPU': group.totals.target_spu,
+                            'Perbaikan Display': group.totals.target_perbaikan_display,
+                            'Pemasangan Spanduk Stiker': group.totals.target_pemasangan_spanduk,
+                            'Visit Customer': group.totals.target_visit_customer
                           });
                           
                           // Empty row for spacing
@@ -892,20 +1001,20 @@ export function KpiTargetSetup() {
                   <tr>
                     <th className="px-3 py-3 border border-slate-700 min-w-[200px] sticky left-0 bg-slate-900 z-20">Slsman \ KPI</th>
                     <th className="px-3 py-3 border border-slate-700 text-center">Omset All (jt)</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">Omset LCD (jt)</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">Redskull (jt)</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">NOA 3C</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">Hydro (pcs)</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">TG (pcs)</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">NOO</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">Idle</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">Mesin</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">SD LCD (jt)</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">REDSKULL (jt)</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">CO 3C</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">Hydro PCS</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">TG PCS</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">New Cust</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">CO Idle</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">CO Mesin</th>
                     <th className="px-3 py-3 border border-slate-700 text-center">CO TG</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">CO &gt;5jt</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">CO 5JT</th>
                     <th className="px-3 py-3 border border-slate-700 text-center">Pymt 3C (jt)</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">Pymt LCD (jt)</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">Pymt 3C+LCD (jt)</th>
                     <th className="px-3 py-3 border border-slate-700 text-center">Prog Bulanan</th>
-                    <th className="px-3 py-3 border border-slate-700 text-center">SPU</th>
+                    <th className="px-3 py-3 border border-slate-700 text-center">Prog SPU</th>
                     <th className="px-3 py-3 border border-slate-700 text-center">Display</th>
                     <th className="px-3 py-3 border border-slate-700 text-center">Spanduk</th>
                     <th className="px-3 py-3 border border-slate-700 text-center">Visit (%)</th>
@@ -1122,23 +1231,23 @@ export function KpiTargetSetup() {
                 onChange={(e) => setMassEditField(e.target.value)}
               >
                 <option value="">-- Pilih KPI yang ingin diubah --</option>
-                <option value="target_omset_all_brand">Target Omset All Brand (Rp)</option>
-                <option value="target_omset_lcd">Target Omset LCD (Rp)</option>
-                <option value="target_omset_redskull">Target Omset Redskull (Rp)</option>
-                <option value="target_co_3c">Target NOA 3C (Toko)</option>
-                <option value="target_hydrogel_pcs">Target Hydrogel (Pcs)</option>
-                <option value="target_tg_pcs">Target TG (Pcs)</option>
-                <option value="target_new_customer">Target NOO (Toko)</option>
-                <option value="target_idle_customer">Target Idle (Toko)</option>
-                <option value="target_co_mesin_vqm">Target CO Mesin (Toko)</option>
-                <option value="target_co_tg">Target CO TG (Toko)</option>
-                <option value="target_omset_5jt">Target Omset &gt; 5Jt (Toko)</option>
-                <option value="target_payment_3c">Target Payment 3C (Rp)</option>
+                <option value="target_omset_all_brand">Total Omset All Brand</option>
+                <option value="target_omset_lcd">SD LCD</option>
+                <option value="target_omset_redskull">REDSKULL</option>
+                <option value="target_co_3c">Total CO 3C</option>
+                <option value="target_hydrogel_pcs">Hydrogel PCS</option>
+                <option value="target_tg_pcs">TG PCS</option>
+                <option value="target_new_customer">New Customer</option>
+                <option value="target_idle_customer">CO IDLE</option>
+                <option value="target_co_mesin_vqm">CO MESIN</option>
+                <option value="target_co_tg">CO TG</option>
+                <option value="target_omset_5jt">CO 5JT</option>
+                <option value="target_payment_3c">Payment 3C</option>
                 <option value="target_program_bulanan">Program Bulanan</option>
-                <option value="target_spu">Target SPU (SKU)</option>
-                <option value="target_perbaikan_display">Target Perbaikan Display (Toko)</option>
-                <option value="target_pemasangan_spanduk">Target Pemasangan Spanduk Stiker (Toko)</option>
-                <option value="target_visit_customer">Target Visit Customer (%)</option>
+                <option value="target_spu">Program SPU</option>
+                <option value="target_perbaikan_display">Perbaikan Display</option>
+                <option value="target_pemasangan_spanduk">Pemasangan Spanduk Stiker</option>
+                <option value="target_visit_customer">Visit Customer</option>
               </select>
             </div>
             <div className="space-y-1.5">

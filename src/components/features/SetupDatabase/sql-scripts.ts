@@ -102,6 +102,11 @@ CREATE TABLE IF NOT EXISTS salesman_customer (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE IF EXISTS salesman_customer ADD COLUMN IF NOT EXISTS upload_month TEXT;
+ALTER TABLE IF EXISTS salesman_customer ADD COLUMN IF NOT EXISTS upload_year TEXT;
+ALTER TABLE IF EXISTS salesman_customer ADD COLUMN IF NOT EXISTS tanggal_pindah DATE;
+
+
 -- 7. Sales Survey Targets
 CREATE TABLE IF NOT EXISTS sales_survey_targets (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -445,6 +450,7 @@ ALTER TABLE IF EXISTS salesman_kpi_targets ADD COLUMN IF NOT EXISTS target_spu N
 ALTER TABLE IF EXISTS salesman_kpi_targets ADD COLUMN IF NOT EXISTS target_perbaikan_display NUMERIC DEFAULT 0;
 ALTER TABLE IF EXISTS salesman_kpi_targets ADD COLUMN IF NOT EXISTS target_pemasangan_spanduk NUMERIC DEFAULT 0;
 ALTER TABLE IF EXISTS salesman_kpi_targets ADD COLUMN IF NOT EXISTS target_visit_customer NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS salesman_kpi_targets ADD COLUMN IF NOT EXISTS custom_targets JSONB DEFAULT '[]'::jsonb;
 
 
 DROP POLICY IF EXISTS "Allow all operations for salesman_kpi_targets" ON salesman_kpi_targets;
@@ -483,16 +489,80 @@ RETURNS void
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    -- This version recalculates payment amounts using ALL payments for a delivery_no across ANY month.
+    -- This ensures that a payment in June for a May order is properly credited to the May order,
+    -- and that manual payment overrides via KPI files are NOT accidentally wiped out.
+
+    -- Match by delivery_no (exact match) for any delivery_no present in the current upload batch
     UPDATE salesman_kpi k
     SET is_paid = true,
-        payment_amount = k.total_amount,
-        payment_date = p.payment_date
-    FROM salesman_payments p
-    WHERE k.delivery_no = p.delivery_no
-      AND k.period_month = p_month
-      AND k.period_year = p_year
-      AND p.period_month = p_month
-      AND p.period_year = p_year;
+        payment_amount = CASE 
+            WHEN (SELECT SUM(COALESCE(total_amount, 0)) 
+                  FROM salesman_kpi k2 
+                  WHERE k2.delivery_no = agg_p.delivery_no) = 0 THEN 0
+            ELSE (COALESCE(k.total_amount, 0) / 
+                 (SELECT SUM(COALESCE(total_amount, 0)) 
+                  FROM salesman_kpi k2 
+                  WHERE k2.delivery_no = agg_p.delivery_no)) * agg_p.total_payment
+        END,
+        payment_date = COALESCE(agg_p.payment_date, k.payment_date)
+    FROM (
+        SELECT p.delivery_no, 
+               SUM(COALESCE(p.total_amount, 0)) as total_payment, 
+               MAX(p.payment_date) as payment_date
+        FROM salesman_payments p
+        WHERE p.delivery_no IN (
+            SELECT DISTINCT delivery_no FROM salesman_payments 
+            WHERE period_month = p_month AND period_year = p_year
+              AND delivery_no IS NOT NULL 
+              AND TRIM(delivery_no) != ''
+        )
+        GROUP BY p.delivery_no
+    ) agg_p
+    WHERE k.delivery_no = agg_p.delivery_no
+      AND k.delivery_no IS NOT NULL 
+      AND TRIM(k.delivery_no) != '';
+
+    -- Match by customer_code ONLY for payments that DID NOT match by delivery_no
+    UPDATE salesman_kpi k
+    SET is_paid = true,
+        payment_amount = payment_amount + CASE 
+            WHEN (SELECT SUM(COALESCE(total_amount, 0)) 
+                  FROM salesman_kpi k2 
+                  WHERE k2.customer_code = agg_p.customer_code 
+                    AND k2.period_month = p_month AND k2.period_year = p_year) = 0 THEN 0
+            ELSE (COALESCE(k.total_amount, 0) / 
+                 (SELECT SUM(COALESCE(total_amount, 0)) 
+                  FROM salesman_kpi k2 
+                  WHERE k2.customer_code = agg_p.customer_code 
+                    AND k2.period_month = p_month AND k2.period_year = p_year)) * agg_p.total_payment
+        END,
+        payment_date = COALESCE(payment_date, agg_p.payment_date)
+    FROM (
+        SELECT customer_code, 
+               SUM(COALESCE(total_amount, 0)) as total_payment, 
+               MAX(payment_date) as payment_date
+        FROM salesman_payments p
+        WHERE period_month = p_month AND period_year = p_year
+          AND customer_code IS NOT NULL 
+          AND TRIM(customer_code) != ''
+          -- Only include payments where the delivery_no is empty OR doesn't match any KPI delivery_no
+          AND (
+              p.delivery_no IS NULL 
+              OR TRIM(p.delivery_no) = '' 
+              OR NOT EXISTS (
+                  SELECT 1 FROM salesman_kpi k3 
+                  WHERE k3.delivery_no = p.delivery_no 
+              )
+          )
+        GROUP BY customer_code
+    ) agg_p
+    WHERE k.customer_code = agg_p.customer_code
+      AND k.customer_code IS NOT NULL 
+      AND TRIM(k.customer_code) != ''
+      AND k.period_month = p_month 
+      AND k.period_year = p_year;
+
 END;
 $$;
 
@@ -598,8 +668,8 @@ BEGIN
         'omsetHomeAppliances', COALESCE(SUM(omset_home_appliances), 0),
         'omsetHomeLiving', COALESCE(SUM(omset_homeliving), 0),
         'omsetDll', COALESCE(SUM(omset_dll), 0),
-        'omset3C', COALESCE(SUM(CASE WHEN brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'dp', 'philips') THEN total_amount ELSE 0 END), 0),
-        'co3C', (SELECT COUNT(DISTINCT COALESCE(customer_code, customer_name, 'unknown')) FROM raw_data WHERE brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'dp', 'philips') AND total_amount > 0),
+        'omset3C', COALESCE(SUM(CASE WHEN brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'philips', 'xpas') AND NOT (brand IN ('vivan', 'xpas') AND category IN ('vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部')) THEN total_amount ELSE 0 END), 0),
+        'co3C', (SELECT COUNT(DISTINCT COALESCE(customer_code, customer_name, 'unknown')) FROM raw_data WHERE brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'philips', 'xpas') AND NOT (brand IN ('vivan', 'xpas') AND category IN ('vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部')) AND total_amount > 0),
         'coAllBrand', (SELECT COUNT(DISTINCT COALESCE(customer_code, customer_name, 'unknown')) FROM raw_data WHERE total_amount > 0),
         'coHomeLiving', (SELECT COUNT(DISTINCT COALESCE(customer_code, customer_name, 'unknown')) FROM raw_data WHERE omset_homeliving > 0),
         'coHomeAppliances', (SELECT COUNT(DISTINCT COALESCE(customer_code, customer_name, 'unknown')) FROM raw_data WHERE omset_home_appliances > 0),
@@ -608,7 +678,7 @@ BEGIN
              SELECT COUNT(*) FROM (
                 SELECT COALESCE(customer_code, customer_name, 'unknown') as c, SUM(total_amount) as t 
                 FROM raw_data 
-                WHERE brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'dp', 'philips') 
+                WHERE brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'philips', 'xpas') AND NOT (brand IN ('vivan', 'xpas') AND category IN ('vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部'))
                 GROUP BY 1 HAVING SUM(total_amount) >= 5000000
              ) sub
         ),
@@ -659,34 +729,37 @@ BEGIN
     WITH payment_data AS (
         SELECT 
             sp.salesman_code,
-            SUM(CASE WHEN LOWER(sp.brand_name) IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen') AND NOT (LOWER(sp.brand_name) = 'vivan' AND LOWER(sp.category) IN ('vivan lcd team', 'vivan sparepart')) AND NOT (LOWER(sp.brand_name) = 'xpas' AND LOWER(sp.category) IN ('xpas sparepart', 'xpas lcd 事业部')) THEN sp.total_amount ELSE 0 END) as total_payment_3c,
+            sp.salesman_name,
+            SUM(CASE WHEN TRIM(LOWER(sp.brand_name)) IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen') AND NOT (TRIM(LOWER(sp.brand_name)) = 'vivan' AND TRIM(COALESCE(LOWER(sp.category), '')) IN ('vivan lcd team', 'vivan sparepart')) THEN sp.total_amount ELSE 0 END) as total_payment_3c,
             SUM(sp.total_amount) as total_payment_all
         FROM salesman_payments sp
         WHERE sp.period_month = p_month 
           AND sp.period_year = p_year
-        GROUP BY sp.salesman_code
+        GROUP BY sp.salesman_code, sp.salesman_name
     ),
     program_data AS (
         SELECT
             pb.salesman_code,
+            pb.salesman_name,
             COUNT(DISTINCT COALESCE(pb.customer_code, pb.customer_name)) as total_achieved
         FROM program_bulanan pb
         WHERE pb.period_month = p_month
           AND pb.period_year = p_year
           AND pb.customer_achieve >= pb.customer_targets
           AND pb.customer_targets > 0
-        GROUP BY pb.salesman_code
+        GROUP BY pb.salesman_code, pb.salesman_name
     ),
     spu_data AS (
         SELECT
             ps.salesman_code,
+            ps.salesman_name,
             COUNT(DISTINCT COALESCE(ps.customer_code, ps.customer_name)) as total_achieved
         FROM program_spu ps
         WHERE ps.period_month = p_month
           AND ps.period_year = p_year
           AND ps.customer_achieve >= ps.customer_targets
           AND ps.customer_targets > 0
-        GROUP BY ps.salesman_code
+        GROUP BY ps.salesman_code, ps.salesman_name
     ),
     manual_data AS (
         SELECT
@@ -701,75 +774,89 @@ BEGIN
     piutang_data AS (
         SELECT 
             pc.salesman_code,
+            pc.salesman_name,
             SUM(CASE WHEN LOWER(pc.brand_name) IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen') AND NOT (LOWER(pc.brand_name) = 'vivan' AND LOWER(pc.category) IN ('vivan lcd team', 'vivan sparepart')) AND NOT (LOWER(pc.brand_name) = 'xpas' AND LOWER(pc.category) IN ('xpas sparepart', 'xpas lcd 事业部')) THEN pc.total_amount ELSE 0 END) as sisa_piutang_3c
         FROM piutang_customer pc
         WHERE pc.period_month = p_month AND pc.period_year = p_year
-        GROUP BY pc.salesman_code
+        GROUP BY pc.salesman_code, pc.salesman_name
+    ),
+    omset_5jt_data AS (
+        SELECT 
+            t.salesman_code,
+            t.salesman_name,
+            COUNT(*) as omset_5jt
+        FROM (
+            SELECT 
+                sk.salesman_code,
+                sk.salesman_name,
+                COALESCE(sk.customer_code, sk.customer_name, 'unknown') as store_id
+            FROM salesman_kpi sk
+            WHERE sk.period_month = p_month AND sk.period_year = p_year
+              AND LOWER(sk.brand_name) IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'philips', 'xpas')
+              AND NOT (LOWER(sk.brand_name) IN ('vivan', 'xpas') AND LOWER(sk.category) IN ('vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部'))
+            GROUP BY sk.salesman_code,
+                sk.salesman_name,
+                COALESCE(sk.customer_code, sk.customer_name, 'unknown')
+            HAVING SUM(sk.total_amount) >= 5000000
+        ) as t
+        GROUP BY t.salesman_code, t.salesman_name
     ),
     base_data AS (
         SELECT 
             s.salesman_code,
             s.salesman_name,
-            s.customer_code,
-            s.customer_name,
-            s.total_amount,
-            s.omset_lcd,
-            s.omset_redskull,
-            s.hydrogel_pcs,
-            s.tg_pcs,
-            s.new_customer,
-            s.idle_customer,
-            s.co_mesin_vqm,
-            s.co_tg,
-            s.omset_5jt,
-            s.is_paid,
-            s.payment_amount,
-            LOWER(s.brand_name) as brand,
-            LOWER(s.category) as category,
-            COALESCE(s.customer_code, s.customer_name, 'unknown') as store_id
+            SUM(s.total_amount) as total_revenue,
+            SUM(CASE WHEN TRIM(LOWER(s.brand_name)) IN ('xpas', 'vivan') AND TRIM(LOWER(s.category)) = 'screen assembly' THEN s.total_amount ELSE 0 END) as omset_lcd,
+            SUM(s.omset_redskull) as omset_redskull,
+            SUM(CASE WHEN TRIM(LOWER(s.brand_name)) IN ('vivan', 'robot', 'acome acc', 'acome iot', 'aula', 'philips', 'xpas', 'gamen') AND NOT (TRIM(LOWER(s.brand_name)) IN ('vivan', 'xpas') AND TRIM(COALESCE(LOWER(s.category), '')) IN ('vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部')) THEN s.total_amount ELSE 0 END) as omset_3c,
+            SUM(s.hydrogel_pcs) as hydrogel_pcs,
+            SUM(s.tg_pcs) as tg_pcs,
+            COUNT(DISTINCT CASE WHEN s.new_customer > 0 AND TRIM(LOWER(s.brand_name)) IN ('vivan', 'robot', 'acome acc', 'acome iot', 'aula', 'philips', 'xpas', 'gamen') AND NOT (TRIM(LOWER(s.brand_name)) IN ('vivan', 'xpas') AND TRIM(COALESCE(LOWER(s.category), '')) IN ('vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部')) THEN COALESCE(s.customer_code, s.customer_name, 'unknown') END) as new_customers,
+            COUNT(DISTINCT CASE WHEN s.idle_customer > 0 AND TRIM(LOWER(s.brand_name)) IN ('vivan', 'robot', 'acome acc', 'acome iot', 'aula', 'philips', 'xpas', 'gamen') AND NOT (TRIM(LOWER(s.brand_name)) IN ('vivan', 'xpas') AND TRIM(COALESCE(LOWER(s.category), '')) IN ('vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部')) THEN COALESCE(s.customer_code, s.customer_name, 'unknown') END) as idle_customers,
+            COUNT(DISTINCT CASE WHEN s.co_mesin_vqm > 0 THEN COALESCE(s.customer_code, s.customer_name, 'unknown') END) as co_mesin_vqm,
+            COUNT(DISTINCT CASE WHEN s.co_tg > 0 THEN COALESCE(s.customer_code, s.customer_name, 'unknown') END) as co_tg,
+            COUNT(DISTINCT CASE WHEN TRIM(LOWER(s.brand_name)) IN ('vivan', 'robot', 'acome acc', 'acome iot', 'aula', 'philips', 'xpas', 'gamen') AND NOT (TRIM(LOWER(s.brand_name)) IN ('vivan', 'xpas') AND TRIM(COALESCE(LOWER(s.category), '')) IN ('vivan lcd team', 'vivan sparepart', 'xpas sparepart', 'xpas lcd 事业部')) AND s.total_amount > 0 THEN COALESCE(s.customer_code, s.customer_name, 'unknown') END) as co_3c
         FROM salesman_kpi s
         WHERE s.period_month = p_month AND s.period_year = p_year AND s.salesman_code IS NOT NULL
+        GROUP BY s.salesman_code, s.salesman_name
+    ),
+    total_cust_data AS (
+        SELECT sk2.salesman_code, sk2.salesman_name, COUNT(DISTINCT COALESCE(sk2.customer_code, sk2.customer_name, 'unknown')) as total_customers 
+        FROM salesman_kpi sk2
+        WHERE sk2.period_month = p_month AND sk2.period_year = p_year 
+        GROUP BY sk2.salesman_code, sk2.salesman_name
     )
     SELECT
         b.salesman_code,
         b.salesman_name,
-        SUM(b.total_amount) as total_revenue,
-        SUM(CASE WHEN b.brand IN ('xpas', 'vivan') AND b.category = 'screen assembly' THEN b.total_amount ELSE 0 END) as omset_lcd,
-        SUM(b.omset_redskull) as omset_redskull,
-        SUM(CASE WHEN b.brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'aula', 'philips', 'dp', 'gamen') THEN b.total_amount ELSE 0 END) as omset_3c,
-        SUM(b.hydrogel_pcs) as hydrogel_pcs,
-        SUM(b.tg_pcs) as tg_pcs,
-        COUNT(DISTINCT CASE WHEN b.new_customer > 0 THEN b.store_id END) as new_customers,
-        COUNT(DISTINCT CASE WHEN b.idle_customer > 0 THEN b.store_id END) as idle_customers,
-        COUNT(DISTINCT CASE WHEN b.co_mesin_vqm > 0 THEN b.store_id END) as co_mesin_vqm,
-        COUNT(DISTINCT CASE WHEN b.co_tg > 0 THEN b.store_id END) as co_tg,
-        COUNT(DISTINCT CASE WHEN b.brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'aula', 'philips', 'dp', 'gamen') AND b.total_amount > 0 THEN b.store_id END) as co_3c,
-        (
-            SELECT COUNT(*)
-            FROM (
-                SELECT inner_b.store_id
-                FROM base_data inner_b
-                WHERE inner_b.salesman_code = b.salesman_code
-                  AND inner_b.brand IN ('vivan', 'robot', 'acome acc', 'acome iot', 'gamen', 'aula', 'dp', 'philips')
-                GROUP BY inner_b.store_id
-                HAVING SUM(inner_b.total_amount) >= 5000000
-            ) as t
-        ) as omset_5jt,
-        COALESCE(MAX(pd.total_payment_3c), 0) as payment_3c,
-        COALESCE(MAX(pd.total_payment_all), 0) as payment_all_brand,
-        COUNT(DISTINCT b.store_id) as total_customers,
-        COALESCE(MAX(prg.total_achieved), 0) as program_bulanan_achieved,
-        COALESCE(MAX(spu.total_achieved), 0) as program_spu_achieved,
-        COALESCE(MAX(piutang.sisa_piutang_3c), 0) as sisa_piutang_3c,
-        COALESCE(MAX(md.total_perbaikan), 0) as perbaikan_display,
-        COALESCE(MAX(md.total_pemasangan), 0) as pemasangan_spanduk
+        COALESCE(b.total_revenue, 0) as total_revenue,
+        COALESCE(b.omset_lcd, 0) as omset_lcd,
+        COALESCE(b.omset_redskull, 0) as omset_redskull,
+        COALESCE(b.omset_3c, 0) as omset_3c,
+        COALESCE(b.hydrogel_pcs, 0) as hydrogel_pcs,
+        COALESCE(b.tg_pcs, 0) as tg_pcs,
+        COALESCE(b.new_customers, 0) as new_customers,
+        COALESCE(b.idle_customers, 0) as idle_customers,
+        COALESCE(b.co_mesin_vqm, 0) as co_mesin_vqm,
+        COALESCE(b.co_tg, 0) as co_tg,
+        COALESCE(b.co_3c, 0) as co_3c,
+        COALESCE(o5.omset_5jt, 0) as omset_5jt,
+        COALESCE(pd.total_payment_3c, 0) as payment_3c,
+        COALESCE(pd.total_payment_all, 0) as payment_all_brand,
+        COALESCE(tot.total_customers, 0) as total_customers,
+        COALESCE(prg.total_achieved, 0) as program_bulanan_achieved,
+        COALESCE(spu.total_achieved, 0) as program_spu_achieved,
+        COALESCE(piutang.sisa_piutang_3c, 0) as sisa_piutang_3c,
+        COALESCE(md.total_perbaikan, 0) as perbaikan_display,
+        COALESCE(md.total_pemasangan, 0) as pemasangan_spanduk
     FROM base_data b
-    LEFT JOIN payment_data pd ON b.salesman_code = pd.salesman_code
-    LEFT JOIN program_data prg ON b.salesman_code = prg.salesman_code
-    LEFT JOIN spu_data spu ON b.salesman_code = spu.salesman_code
-    LEFT JOIN piutang_data piutang ON b.salesman_code = piutang.salesman_code
+    LEFT JOIN payment_data pd ON b.salesman_code = pd.salesman_code AND b.salesman_name = pd.salesman_name
+    LEFT JOIN program_data prg ON b.salesman_code = prg.salesman_code AND b.salesman_name = prg.salesman_name
+    LEFT JOIN spu_data spu ON b.salesman_code = spu.salesman_code AND b.salesman_name = spu.salesman_name
+    LEFT JOIN piutang_data piutang ON b.salesman_code = piutang.salesman_code AND b.salesman_name = piutang.salesman_name
     LEFT JOIN manual_data md ON b.salesman_code = md.salesman_code
-    GROUP BY b.salesman_code, b.salesman_name;
+    LEFT JOIN omset_5jt_data o5 ON b.salesman_code = o5.salesman_code AND b.salesman_name = o5.salesman_name
+    LEFT JOIN total_cust_data tot ON b.salesman_code = tot.salesman_code AND b.salesman_name = tot.salesman_name;
 END;
 $$;
 
@@ -1120,4 +1207,35 @@ CREATE TABLE IF NOT EXISTS app_settings (
 DROP POLICY IF EXISTS "Allow all operations for app_settings" ON app_settings;
 CREATE POLICY "Allow all operations for app_settings" ON app_settings FOR ALL USING (true) WITH CHECK (true);
 ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE IF EXISTS customer_kpi_targets ADD COLUMN IF NOT EXISTS keterangan TEXT;
+
+-- 35. Indexes for Performance Optimization
+CREATE INDEX IF NOT EXISTS idx_salesman_kpi_period ON salesman_kpi(period_month, period_year);
+CREATE INDEX IF NOT EXISTS idx_salesman_kpi_salesman ON salesman_kpi(salesman_code);
+CREATE INDEX IF NOT EXISTS idx_visit_cust_period ON visit_customer(period_month, period_year);
+CREATE INDEX IF NOT EXISTS idx_visit_cust_salesman ON visit_customer(salesman_code);
+CREATE INDEX IF NOT EXISTS idx_salesman_payments_period ON salesman_payments(period_month, period_year);
+CREATE INDEX IF NOT EXISTS idx_salesman_customer_salesman ON salesman_customer(salesman_code);
+CREATE INDEX IF NOT EXISTS idx_salesman_kpi_period_sm ON salesman_kpi(period_month, period_year, salesman_code);
+CREATE INDEX IF NOT EXISTS idx_visit_cust_period_sm ON visit_customer(period_month, period_year, salesman_code);
+CREATE INDEX IF NOT EXISTS idx_salesman_payments_period_sm ON salesman_payments(period_month, period_year, salesman_code);
+CREATE INDEX IF NOT EXISTS idx_program_bulanan_period_sm ON program_bulanan(period_month, period_year, salesman_code);
+CREATE INDEX IF NOT EXISTS idx_program_spu_period_sm ON program_spu(period_month, period_year, salesman_code);
+CREATE INDEX IF NOT EXISTS idx_salesman_manual_period_sm ON salesman_manual_activities(period_month, period_year, salesman_code);
+CREATE INDEX IF NOT EXISTS idx_piutang_cust_period_sm ON piutang_customer(period_month, period_year, salesman_code);
+
+-- 36. Salesman Passwords
+CREATE TABLE IF NOT EXISTS salesman_passwords (
+  salesman_code TEXT PRIMARY KEY,
+  password TEXT NOT NULL DEFAULT 'Wook123',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+DROP POLICY IF EXISTS "Allow all operations for salesman_passwords" ON salesman_passwords;
+CREATE POLICY "Allow all operations for salesman_passwords" ON salesman_passwords FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE salesman_passwords ENABLE ROW LEVEL SECURITY;
+
+
 `;

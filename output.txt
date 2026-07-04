@@ -1,0 +1,5 @@
+FOUND: Salesman/Month: Sendi Yusuf Pratama | Robo+かや_6 | Omset: 130116937 | KPI: 130116937
+DIFF: Salesman/Month: Sendi Yusuf Pratama | Robo+かや_4 | Omset: 57639973 | KPI: 57788613
+FOUND: Salesman/Month: ADITYA APRILIANTO_2 | Omset: 138389666 | KPI: 138389666
+FOUND: Salesman/Month: Ali Akbar_1 | Omset: 130066950 | KPI: 130066950
+FOUND: Salesman/Month: ADITYA APRILIANTO_1 | Omset: 135000699 | KPI: 135000699

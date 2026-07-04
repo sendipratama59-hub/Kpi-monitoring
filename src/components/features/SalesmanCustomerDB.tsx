@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/Button';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { supabase } from '../../services/supabase';
-import { Users, Search, Loader2, UploadCloud, FileSpreadsheet, Trash2, Trash, AlertCircle, Plus } from 'lucide-react';
+import { Users, Search, Loader2, UploadCloud, FileSpreadsheet, Trash2, Trash, AlertCircle, Plus, ArrowRightLeft } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { useAlert } from '../ui/AlertModal';
@@ -15,6 +15,72 @@ interface SalesmanCustomer {
   salesman_name: string;
   customer_code: string;
   customer_name: string;
+  upload_month?: string;
+  upload_year?: string;
+  tanggal_pindah?: string;
+}
+
+interface AutocompleteOption {
+  code: string;
+  name: string;
+}
+
+function AutocompleteInput({ 
+  value, 
+  onChange, 
+  options, 
+  placeholder, 
+  displayKey,
+  onSelect
+}: { 
+  value: string;
+  onChange: (val: string) => void;
+  options: AutocompleteOption[];
+  placeholder: string;
+  displayKey: 'code' | 'name';
+  onSelect: (opt: AutocompleteOption) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const filtered = options.filter(o => 
+    o[displayKey].toLowerCase().includes(value.toLowerCase()) || 
+    (displayKey === 'code' ? o.name : o.code).toLowerCase().includes(value.toLowerCase())
+  ).slice(0, 10);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={e => {
+          onChange(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+        autoComplete="off"
+      />
+      {isOpen && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+          {filtered.map((opt, i) => (
+            <div 
+              key={`${opt.code}-${i}`}
+              className="px-3 py-2 text-sm hover:bg-slate-50 cursor-pointer border-b last:border-b-0"
+              onClick={() => {
+                onSelect(opt);
+                setIsOpen(false);
+              }}
+            >
+              <div className="font-semibold text-slate-800">{opt.name}</div>
+              <div className="text-xs text-slate-500">{opt.code}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SalesmanCustomerDB() {
@@ -35,6 +101,18 @@ export function SalesmanCustomerDB() {
   const [newCustomerCode, setNewCustomerCode] = useState('');
   const [newCustomerName, setNewCustomerName] = useState('');
   const [isSavingManual, setIsSavingManual] = useState(false);
+
+  const currentMonth = (new Date().getMonth() + 1).toString().padStart(2, '0');
+  const currentYear = new Date().getFullYear().toString();
+  const [uploadMonth, setUploadMonth] = useState(currentMonth);
+  const [uploadYear, setUploadYear] = useState(currentYear);
+
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<SalesmanCustomer | null>(null);
+  const [transferSalesmanCode, setTransferSalesmanCode] = useState('');
+  const [transferSalesmanName, setTransferSalesmanName] = useState('');
+  const [transferDate, setTransferDate] = useState('');
+  const [isTransferring, setIsTransferring] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -148,8 +226,12 @@ export function SalesmanCustomerDB() {
     setIsSaving(true);
     setError(null);
     try {
-      // Remove temporary ID before inserting
-      const dataToInsert = previewData.map(({ id, ...rest }) => rest);
+      // Remove temporary ID before inserting and add upload month/year
+      const dataToInsert = previewData.map(({ id, ...rest }) => ({
+        ...rest,
+        upload_month: uploadMonth,
+        upload_year: uploadYear
+      }));
       
       const BATCH_SIZE = 500;
       for (let i = 0; i < dataToInsert.length; i += BATCH_SIZE) {
@@ -192,7 +274,9 @@ export function SalesmanCustomerDB() {
           salesman_code: newSalesmanCode,
           salesman_name: newSalesmanName,
           customer_code: newCustomerCode || '-',
-          customer_name: newCustomerName || '-'
+          customer_name: newCustomerName || '-',
+          upload_month: uploadMonth,
+          upload_year: uploadYear
         }]);
 
       if (insertError) throw insertError;
@@ -226,6 +310,43 @@ export function SalesmanCustomerDB() {
       setLoading(false);
     }
   };
+
+  const handleTransferCustomer = async () => {
+    if (!transferTarget || !transferSalesmanCode || !transferSalesmanName || !transferDate) {
+      showAlert('Semua field transfer harus diisi', 'warning');
+      return;
+    }
+    
+    setIsTransferring(true);
+    try {
+      const { error } = await supabase
+        .from('salesman_customer')
+        .update({
+          salesman_code: transferSalesmanCode,
+          salesman_name: transferSalesmanName,
+          tanggal_pindah: transferDate
+        })
+        .eq('id', transferTarget.id);
+        
+      if (error) throw error;
+      
+      showAlert('Customer berhasil dipindahkan', 'success');
+      setIsTransferModalOpen(false);
+      setTransferSalesmanCode('');
+      setTransferSalesmanName('');
+      setTransferDate('');
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      showAlert(err.message || 'Gagal memindahkan customer', 'error');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  const uniqueSalesmen = Array.from(
+    new Map(data.map(item => [item.salesman_code, { code: item.salesman_code, name: item.salesman_name }])).values()
+  );
 
   const filteredData = (previewData || data).filter(d => {
     const namaSalesman = String(d.salesman_name || '').toLowerCase();
@@ -291,6 +412,31 @@ export function SalesmanCustomerDB() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6">
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Bulan Upload</label>
+                  <select 
+                    value={uploadMonth} 
+                    onChange={e => setUploadMonth(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                  >
+                    {Array.from({length: 12}).map((_, i) => (
+                      <option key={i+1} value={(i+1).toString().padStart(2, '0')}>
+                        {new Date(2000, i).toLocaleString('id-ID', { month: 'long' })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Tahun Upload</label>
+                  <input 
+                    type="number" 
+                    value={uploadYear}
+                    onChange={e => setUploadYear(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+              </div>
               <div 
                 {...getRootProps()} 
                 className={`
@@ -376,19 +522,22 @@ export function SalesmanCustomerDB() {
                       <th className="px-4 py-3">Nama Salesman</th>
                       <th className="px-4 py-3">Kode Customer</th>
                       <th className="px-4 py-3">Nama Customer</th>
+                      <th className="px-4 py-3 text-center">Bulan/Tahun</th>
+                      <th className="px-4 py-3 text-center">Tgl Pindah</th>
+                      <th className="px-4 py-3 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                           Memuat data...
                         </td>
                       </tr>
                     ) : paginatedData.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                           Belum ada data atau tidak ditemukan.
                         </td>
                       </tr>
@@ -399,6 +548,27 @@ export function SalesmanCustomerDB() {
                           <td className="px-4 py-3 text-slate-900">{row.salesman_name}</td>
                           <td className="px-4 py-3 font-medium text-slate-700">{row.customer_code}</td>
                           <td className="px-4 py-3 text-slate-900">{row.customer_name}</td>
+                          <td className="px-4 py-3 text-center text-slate-600">
+                            {row.upload_month && row.upload_year ? `${row.upload_month}/${row.upload_year}` : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-center text-slate-600">
+                            {row.tanggal_pindah ? new Date(row.tanggal_pindah).toLocaleDateString('id-ID') : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                              onClick={() => {
+                                setTransferTarget(row);
+                                setIsTransferModalOpen(true);
+                              }}
+                              disabled={!!previewData}
+                            >
+                              <ArrowRightLeft className="w-3 h-3 mr-1" />
+                              Pindah
+                            </Button>
+                          </td>
                         </tr>
                       ))
                     )}
@@ -428,25 +598,58 @@ export function SalesmanCustomerDB() {
         maxWidth="max-w-md"
       >
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Bulan Upload</label>
+              <select 
+                value={uploadMonth} 
+                onChange={e => setUploadMonth(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+              >
+                {Array.from({length: 12}).map((_, i) => (
+                  <option key={i+1} value={(i+1).toString().padStart(2, '0')}>
+                    {new Date(2000, i).toLocaleString('id-ID', { month: 'long' })}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Tahun Upload</label>
+              <input 
+                type="number" 
+                value={uploadYear}
+                onChange={e => setUploadYear(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Kode Salesman</label>
-              <input
-                type="text"
+              <AutocompleteInput
                 value={newSalesmanCode}
-                onChange={e => setNewSalesmanCode(e.target.value)}
-                placeholder="Contoh: S001"
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                onChange={setNewSalesmanCode}
+                options={uniqueSalesmen}
+                placeholder="Cari atau ketik kode..."
+                displayKey="code"
+                onSelect={(opt) => {
+                  setNewSalesmanCode(opt.code);
+                  setNewSalesmanName(opt.name);
+                }}
               />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Nama Salesman</label>
-              <input
-                type="text"
+              <AutocompleteInput
                 value={newSalesmanName}
-                onChange={e => setNewSalesmanName(e.target.value)}
-                placeholder="Contoh: Budi Santoso"
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                onChange={setNewSalesmanName}
+                options={uniqueSalesmen}
+                placeholder="Cari atau ketik nama..."
+                displayKey="name"
+                onSelect={(opt) => {
+                  setNewSalesmanCode(opt.code);
+                  setNewSalesmanName(opt.name);
+                }}
               />
             </div>
             <div className="space-y-1.5">
@@ -486,6 +689,80 @@ export function SalesmanCustomerDB() {
             >
               {isSavingManual ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
               Tambah Data
+            </Button>
+          </div>
+        </div>
+      </GenieModal>
+
+      <GenieModal
+        isOpen={isTransferModalOpen}
+        onClose={() => setIsTransferModalOpen(false)}
+        title="Transfer Customer"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          {transferTarget && (
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm">
+              <div className="font-semibold text-slate-800">{transferTarget.customer_name} ({transferTarget.customer_code})</div>
+              <div className="text-slate-500 mt-1">Saat ini: {transferTarget.salesman_name} ({transferTarget.salesman_code})</div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Kode Salesman Baru</label>
+              <AutocompleteInput
+                value={transferSalesmanCode}
+                onChange={setTransferSalesmanCode}
+                options={uniqueSalesmen}
+                placeholder="Cari atau ketik kode..."
+                displayKey="code"
+                onSelect={(opt) => {
+                  setTransferSalesmanCode(opt.code);
+                  setTransferSalesmanName(opt.name);
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Nama Salesman Baru</label>
+              <AutocompleteInput
+                value={transferSalesmanName}
+                onChange={setTransferSalesmanName}
+                options={uniqueSalesmen}
+                placeholder="Cari atau ketik nama..."
+                displayKey="name"
+                onSelect={(opt) => {
+                  setTransferSalesmanCode(opt.code);
+                  setTransferSalesmanName(opt.name);
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Tanggal Pindah</label>
+              <input
+                type="date"
+                value={transferDate}
+                onChange={e => setTransferDate(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-2 pt-4">
+            <Button 
+              variant="outline" 
+              className="flex-1 font-bold" 
+              onClick={() => setIsTransferModalOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button 
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+              onClick={handleTransferCustomer}
+              disabled={isTransferring}
+            >
+              {isTransferring ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ArrowRightLeft className="w-4 h-4 mr-2" />}
+              Proses Transfer
             </Button>
           </div>
         </div>

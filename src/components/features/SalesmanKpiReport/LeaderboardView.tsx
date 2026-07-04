@@ -7,6 +7,8 @@ import { StoreDataList } from './StoreDataList';
 import { getStoresForKpi } from './utils';
 import { ManualKpiLogger } from './ManualKpiLogger';
 
+import { GlobalKpiSummaryTable } from './GlobalKpiSummaryTable';
+
 const getRankBadgeProps = (idx: number) => {
   switch (idx) {
     case 0: return { className: 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-400', icon: <Trophy className="w-4 h-4 ml-1 inline text-yellow-500" /> };
@@ -18,6 +20,8 @@ const getRankBadgeProps = (idx: number) => {
 
 interface LeaderboardViewProps {
   isLoading: boolean;
+  fetchError?: string | null;
+  summaryData: any[];
   filteredData: any[];
   targets: any[];
   selectedMetric: string;
@@ -35,6 +39,8 @@ interface LeaderboardViewProps {
 
 export function LeaderboardView({
   isLoading,
+  fetchError,
+  summaryData,
   filteredData,
   targets,
   selectedMetric,
@@ -67,20 +73,34 @@ export function LeaderboardView({
         </CardTitle>
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
           <div className="relative flex-1 sm:w-56">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Cari salesman..." 
+            <select 
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (e.target.value) setSelectedMetric('all');
+              }}
+              className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+            >
+              <option value="">Semua Salesman</option>
+              {Array.from(new Map(summaryData.filter((s: any) => s.salesman_code && s.salesman_name).map((s: any) => [s.salesman_code, s])).values())
+                .sort((a: any, b: any) => a.salesman_name.localeCompare(b.salesman_name))
+                .map((salesman: any) => (
+                  <option key={salesman.salesman_code} value={salesman.salesman_code}>
+                    {salesman.salesman_name}
+                  </option>
+                ))
+              }
+            </select>
           </div>
           <select 
             className="border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white font-medium text-slate-700 w-full sm:w-auto"
             value={selectedMetric}
-            onChange={(e) => setSelectedMetric(e.target.value)}
+            onChange={(e) => {
+              setSelectedMetric(e.target.value);
+              if (e.target.value !== 'all') setSearchTerm('');
+            }}
           >
+            <option value="all">Semua KPI (Gabungan)</option>
             <optgroup label="Metrik Pencapaian Terbaik">
               {METRICS.map((m: any) => (
                 <option key={m.id} value={m.id}>{m.label}</option>
@@ -95,6 +115,11 @@ export function LeaderboardView({
             <Loader2 className="w-8 h-8 animate-spin mb-4 text-indigo-500" />
             <p>Memuat data KPI via RPC Server...</p>
           </div>
+        ) : fetchError ? (
+          <div className="flex flex-col items-center justify-center p-12 text-red-500 bg-red-50 m-4 rounded-xl border border-red-100">
+            <p className="font-bold mb-2">Gagal Memuat Data</p>
+            <p className="text-sm text-center max-w-md">{fetchError}</p>
+          </div>
         ) : filteredData.length === 0 ? (
           <div className="text-center p-12 text-slate-500">
             <p>Tidak ada data KPI. Silakan unggah data file Excel/CSV di menu Upload.</p>
@@ -102,6 +127,11 @@ export function LeaderboardView({
           </div>
         ) : (
           <>
+            {!expandedSalesmanRow && (
+              <div className="p-4 bg-white border-b border-slate-200">
+                <GlobalKpiSummaryTable summaryData={filteredData} targets={targets} selectedMetric={selectedMetric} />
+              </div>
+            )}
             <div className="space-y-3 p-4 bg-slate-50/50">
             {filteredData.map((sm, idx) => {
               const metricConfig = METRICS.find((m: any) => m.id === selectedMetric);

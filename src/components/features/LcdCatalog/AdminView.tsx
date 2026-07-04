@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../ui/Card';
 import { Button } from '../../ui/Button';
-import { Search, Loader2, Edit, Trash2, Plus, MonitorSmartphone, UploadCloud, FileSpreadsheet, CheckCircle2, AlertCircle, Share2, Link as LinkIcon, Copy, Download } from 'lucide-react';
+import { Search, Loader2, Edit, Trash2, Plus, MonitorSmartphone, UploadCloud, FileSpreadsheet, CheckCircle2, AlertCircle, Share2, Link as LinkIcon, Copy, Download, Check } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
@@ -24,6 +24,27 @@ interface LcdProduct {
   warranty_months?: number;
   custom_discount?: string;
 }
+
+const generateDeterministicUUID = (goodsCode: string, brandLcd: string): string => {
+  const input = `${(brandLcd || 'Vivan').trim().toLowerCase()}:${(goodsCode || '-').trim().toLowerCase()}`;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 15), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 15), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 16), 3266489909);
+  
+  const part1 = (h1 >>> 0).toString(16).padStart(8, '0');
+  const part2 = (h2 >>> 0).toString(16).padStart(8, '0');
+  const part3 = (Math.imul(h1, h2) >>> 0).toString(16).padStart(8, '0');
+  const part4 = (Math.imul(h2, h1) >>> 0).toString(16).padStart(8, '0');
+  const hex = (part1 + part2 + part3 + part4).slice(0, 32);
+  
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+};
 
 export function AdminLcdCatalog() {
   const { showAlert, showConfirm } = useAlert();
@@ -52,6 +73,7 @@ export function AdminLcdCatalog() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [clearExistingBatch, setClearExistingBatch] = useState(true);
 
   // Filter & Selection State
   const [searchTerm, setSearchTerm] = useState('');
@@ -489,7 +511,8 @@ export function AdminLcdCatalog() {
     if (formData.id) {
       await supabase.from('lcd_catalog_products').update(dataToSave).eq('id', formData.id);
     } else {
-      await supabase.from('lcd_catalog_products').insert([dataToSave]);
+      const generatedId = generateDeterministicUUID(formData.goods_code || '', formData.brand_lcd || 'Vivan');
+      await supabase.from('lcd_catalog_products').insert([{ ...dataToSave, id: generatedId }]);
     }
     setIsEditing(false);
     fetchProducts();
@@ -617,6 +640,74 @@ export function AdminLcdCatalog() {
     }
   };
 
+  const handleDownloadPromoExcel = (promo: any) => {
+    const promoProducts = products.filter(p => {
+      if (p.id && promo.selected_products && promo.selected_products.includes(p.id)) return true;
+      const hpBrand = p.brand_hp || '';
+      if (promo.type === 'brand' && hpBrand.toLowerCase().includes((promo.value || '').toLowerCase())) return true;
+      if (promo.type === 'model' && String(p.model_hp || '').toLowerCase().includes((promo.value || '').toLowerCase())) return true;
+      if (promo.type === 'product' && promo.value === p.id) return true;
+      return false;
+    });
+
+    if (promoProducts.length === 0) {
+      showAlert('Tidak ada data produk untuk promo ini.', 'error');
+      return;
+    }
+
+    const parsePcsCount = (packingStr: string): number => {
+      if (!packingStr) return 1;
+      const pcsMatch = packingStr.match(/(\d+)\s*PCS/i);
+      if (pcsMatch) {
+        const num = parseInt(pcsMatch[1], 10);
+        return num > 0 ? num : 1;
+      }
+      const piecesMatch = packingStr.match(/(\d+)\s*PIECE/i);
+      if (piecesMatch) {
+        const num = parseInt(piecesMatch[1], 10);
+        return num > 0 ? num : 1;
+      }
+      const numberMatch = packingStr.match(/(\d+)/);
+      if (numberMatch) {
+        const num = parseInt(numberMatch[1], 10);
+        return num > 0 ? num : 1;
+      }
+      return 1;
+    };
+
+    const rows = promoProducts.map((p, idx) => {
+      const price = p.price || 0;
+      const discountPct = promo.discountPercentage || 0;
+      const discountAmount = price * (discountPct / 100);
+      const nettPrice = price - discountAmount;
+
+      const pcsCount = parsePcsCount(p.packing || '');
+      const pricePerPcs = nettPrice / pcsCount;
+
+      return {
+        'No': idx + 1,
+        'Kode Produk': p.goods_code || '-',
+        'Brand LCD': p.brand_lcd || '-',
+        'Brand HP': p.brand_hp || '-',
+        'Model HP': p.model_hp || '-',
+        'Packing': p.packing || '-',
+        'Harga / box': Math.round(nettPrice),
+        'Harga / pcs': Math.round(pricePerPcs)
+      };
+    });
+
+    try {
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, `Promo ${promo.name || 'Promo'}`);
+      const fileNameStr = (promo.name || 'Promo').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      XLSX.writeFile(workbook, `Pricelist_Promo_${fileNameStr}_${new Date().getTime()}.xlsx`);
+      showAlert(`Pricelist Excel untuk promo "${promo.name}" berhasil didownload.`, 'success');
+    } catch (e: any) {
+      showAlert('Gagal mengekspor file Excel: ' + (e?.message || e), 'error');
+    }
+  };
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
     
@@ -666,8 +757,25 @@ export function AdminLcdCatalog() {
       const { data: existingData, error: errExist } = await supabase.from('lcd_catalog_products').select('*');
       if (errExist) throw errExist;
       
-      const existingMap = new Map();
+      // Build mapping from existing random/deterministic ID to unique product key before we delete anything
+      const idToKey = new Map<string, string>();
       if (existingData) {
+        existingData.forEach(p => {
+          if (p.id && p.goods_code) {
+            const key = `${(p.brand_lcd || 'Vivan').trim().toLowerCase()}:${p.goods_code.trim().toLowerCase()}`;
+            idToKey.set(p.id, key);
+          }
+        });
+      }
+
+      // If clear batch is checked, delete all existing products first
+      if (clearExistingBatch) {
+        const { error: errDel } = await supabase.from('lcd_catalog_products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (errDel) throw errDel;
+      }
+
+      const existingMap = new Map();
+      if (!clearExistingBatch && existingData) {
         existingData.forEach(d => {
           if (d.goods_code && d.goods_code !== '-') {
             existingMap.set(d.goods_code.toString().trim(), d);
@@ -748,10 +856,12 @@ export function AdminLcdCatalog() {
           }
         }
 
+        const resolvedBrandLcd = parsedBrandLcd !== undefined ? parsedBrandLcd : (existingRow?.brand_lcd || 'Vivan');
+
         return {
-          id: existingRow ? existingRow.id : crypto.randomUUID(),
+          id: existingRow ? existingRow.id : generateDeterministicUUID(goods_code, resolvedBrandLcd),
           goods_code: goods_code,
-          brand_lcd: parsedBrandLcd !== undefined ? parsedBrandLcd : (existingRow?.brand_lcd || 'Vivan'),
+          brand_lcd: resolvedBrandLcd,
           brand_hp: brand_hp !== undefined ? String(brand_hp) : (existingRow?.brand_hp || 'Unknown'),
           brand: brand_hp !== undefined ? String(brand_hp) : (existingRow?.brand || existingRow?.brand_hp || 'Unknown'),
           model_hp: model_hp !== undefined ? String(model_hp) : (existingRow?.model_hp || 'Unknown'),
@@ -764,6 +874,40 @@ export function AdminLcdCatalog() {
           competitors: existingRow?.competitors || null
         };
       });
+
+      // Build mapping from unique product key to the new ID
+      const keyToNewId = new Map<string, string>();
+      dataToUpsert.forEach(item => {
+        if (item.goods_code && item.id) {
+          const key = `${(item.brand_lcd || 'Vivan').trim().toLowerCase()}:${item.goods_code.trim().toLowerCase()}`;
+          keyToNewId.set(key, item.id);
+        }
+      });
+
+      // Migrate selected_products of existing promos using the mapping
+      let promosChanged = false;
+      const mappedPromos = promos.map(promo => {
+        if (promo.selected_products && promo.selected_products.length > 0) {
+          const newSelected = promo.selected_products.map((oldId: string) => {
+            const key = idToKey.get(oldId);
+            if (key) {
+              const newId = keyToNewId.get(key);
+              if (newId) {
+                promosChanged = true;
+                return newId;
+              }
+            }
+            return oldId;
+          });
+          return { ...promo, selected_products: newSelected };
+        }
+        return promo;
+      });
+
+      if (promosChanged) {
+        setPromos(mappedPromos);
+        await savePromosToDb(mappedPromos);
+      }
 
       // Upsert data in chunks
       const chunkSize = 100;
@@ -1031,6 +1175,33 @@ export function AdminLcdCatalog() {
                     Mendukung format .xlsx dan .xls. Pastikan kolom memuat: <span className="font-bold">goods_code, brand_hp, model_hp, packing, price, brand_lcd</span>
                   </p>
                   <p className="text-xs text-indigo-500 font-medium mt-2">Dapat mengupload Vivan dan XPas sekaligus dalam 1 file.</p>
+                </div>
+
+                 <div 
+                  onClick={() => setClearExistingBatch(!clearExistingBatch)}
+                  className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center gap-4 ${
+                    clearExistingBatch 
+                      ? 'bg-amber-50/50 border-amber-300 shadow-sm' 
+                      : 'bg-white border-slate-200 opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                    clearExistingBatch 
+                      ? 'bg-amber-100 text-amber-700' 
+                      : 'bg-slate-100 text-slate-400'
+                  }`}>
+                    {clearExistingBatch ? (
+                      <Check className="w-5 h-5 stroke-[3]" />
+                    ) : (
+                      <div className="w-4 h-4 rounded border-2 border-slate-300" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-extrabold text-slate-800 text-sm tracking-wide uppercase">CLEAR EXISTING DATA</h3>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed mt-0.5">
+                      Hapus semua data pricelist LCD yang ada sebelum mengimport yang baru. Mencegah duplikasi data.
+                    </p>
+                  </div>
                 </div>
 
                 {uploadError && (
@@ -1688,6 +1859,7 @@ export function AdminLcdCatalog() {
                           </td>
                           <td className="px-4 py-3 text-rose-600 font-bold">-{p.discountPercentage}%</td>
                           <td className="px-4 py-3 flex gap-2 justify-end">
+                            <Button variant="outline" size="sm" onClick={() => handleDownloadPromoExcel(p)} title="Download Excel Promo"><Download className="w-4 h-4 text-blue-600" /></Button>
                             <Button variant="outline" size="sm" onClick={() => duplicatePromo(p)} title="Duplikat"><Copy className="w-4 h-4 text-emerald-600" /></Button>
                             <Button variant="outline" size="sm" onClick={() => { setPromoForm({...defaultPromoForm, ...p}); setIsEditingPromo(true); }}><Edit className="w-4 h-4" /></Button>
                             <Button variant="outline" size="sm" className="text-rose-600 hover:bg-rose-50" onClick={() => deletePromo(p.id)}><Trash2 className="w-4 h-4" /></Button>

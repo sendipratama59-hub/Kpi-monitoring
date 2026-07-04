@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Upload, Sparkles, Database, ClipboardList, Users, ChevronDown, ChevronRight, Target, BookOpen, Undo2, Send, Map } from 'lucide-react';
+import { LayoutDashboard, Upload, Sparkles, Database, ClipboardList, Users, ChevronDown, ChevronRight, Target, BookOpen, Undo2, Send, Map, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 interface SidebarProps {
@@ -12,13 +12,23 @@ export function Sidebar({ currentView, onChangeView }: SidebarProps) {
 
   const menuItems = [
     { id: 'setup', label: 'DB Setup', icon: Database },
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'supabase-viewer', label: 'Supabase', icon: Database },
+    { id: 'salesman-dashboard', label: 'Dashboard Sales', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'Dashboard Admin', icon: LayoutDashboard },
     { id: 'visit-plan', label: 'Planning Kunjungan', icon: Send },
-    { id: 'customer-analysis', label: 'Analisa Customer', icon: Sparkles },
     { id: 'retur-barang', label: 'Retur Barang', icon: Undo2 },
     { id: 'customer-report', label: 'Laporan Target Cust', icon: ClipboardList },
     { id: 'kpi-report', label: 'KPI Report', icon: Sparkles },
-    { id: 'salesman-analysis', label: 'Analisa Salesman', icon: Sparkles },
+    { 
+      id: 'analysis-group', 
+      label: 'Pusat Analisa', 
+      icon: BarChart3,
+      subItems: [
+        { id: 'salesman-analysis', label: 'Analisa Salesman' },
+        { id: 'customer-analysis', label: 'Analisa Customer' },
+        { id: 'revenue-analysis', label: 'Analisa Omset' }
+      ]
+    },
     { id: 'kpi-targets', label: 'Target KPI', icon: Target },
     { id: 'team-config', label: 'Konfigurasi Tim Poin', icon: Users },
     { 
@@ -49,6 +59,7 @@ export function Sidebar({ currentView, onChangeView }: SidebarProps) {
     { id: 'form-builder', label: 'Form Builder', icon: ClipboardList },
     { id: 'dynamic-excel', label: 'Dynamic Excel Manager', icon: Database },
     { id: 'upload', label: 'Upload Data', icon: Upload },
+    { id: 'live-excel', label: 'Live Excel', icon: FileSpreadsheet },
     { id: 'insights', label: 'AI Insights', icon: Sparkles },
     { id: 'docs', label: 'Dokumentasi', icon: BookOpen },
   ];

@@ -47,7 +47,8 @@ export function Sidebar({ currentView, onChangeView }: SidebarProps) {
       icon: Users,
       subItems: [
         { id: 'db-sales-customer', label: 'Database Sales & Customer' },
-        { id: 'db-barang', label: 'Database Barang' }
+        { id: 'db-barang', label: 'Database Barang' },
+        { id: 'db-idle-customer', label: 'Idle Customer' }
       ]
     },
     { id: 'report-lcd', label: 'Report LCD', icon: ClipboardList },

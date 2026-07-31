@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 const TABLE_LIST = [
   { id: 'raw_master_data', name: 'Master Data / Raw Master' },
   { id: 'salesman_customer', name: 'Salesman & Customer' },
+  { id: 'salesman_idle_customer', name: 'Idle Customer' },
   { id: 'database_barang', name: 'Database Barang' },
   { id: 'lcd_catalog_products', name: 'Katalog LCD (Produk)' },
   { id: 'survey_channel', name: 'Survey Channel' },

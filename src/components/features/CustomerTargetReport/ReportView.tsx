@@ -25,43 +25,61 @@ export const ReportView = ({
   periodeRange,
   targets,
 }: ReportViewProps) => {
-  // Helper to parse period and calculate remaining days
-  const getDaysRemaining = (rangeStr: string) => {
+  // Helper to parse period and calculate progress info
+  const getPeriodInfo = (rangeStr: string) => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
     
     const totalDaysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const daysRemainingInMonth = Math.max(1, totalDaysInMonth - now.getDate() + 1);
+    let daysRemaining = Math.max(1, totalDaysInMonth - now.getDate() + 1);
+    let totalDays = totalDaysInMonth;
+    let daysPassed = now.getDate();
 
     try {
       const parts = rangeStr.split("-");
       if (parts.length === 2) {
+        const startPart = parts[0].trim();
         const endPart = parts[1].trim();
-        const dateParts = endPart.split("/");
-        if (dateParts.length === 3) {
-          const endDay = parseInt(dateParts[0]);
-          const endMonth = parseInt(dateParts[1]) - 1;
-          const endYear = parseInt(dateParts[2]);
+        
+        const parseDate = (dStr: string) => {
+           const dParts = dStr.split("/");
+           if (dParts.length === 3) {
+               return new Date(parseInt(dParts[2]), parseInt(dParts[1]) - 1, parseInt(dParts[0]));
+           }
+           return null;
+        }
+
+        const startDate = parseDate(startPart);
+        const endDate = parseDate(endPart);
+        
+        if (startDate && endDate) {
+          startDate.setHours(0,0,0,0);
+          endDate.setHours(23,59,59,999);
+          const today = new Date();
+          today.setHours(0,0,0,0);
+
+          totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
           
-          const endDate = new Date(endYear, endMonth, endDay, 23, 59, 59);
-          const diffTime = endDate.getTime() - now.getTime();
-          const daysRemaining = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-          return daysRemaining;
+          daysPassed = Math.max(0, Math.ceil((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+          if (daysPassed > totalDays) daysPassed = totalDays;
+          
+          daysRemaining = Math.max(1, Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
         }
       }
     } catch (err) {
-      console.warn("Failed to parse period end date, fallback to current month end:", err);
+      console.warn("Failed to parse period dates, fallback to current month:", err);
     }
-    return daysRemainingInMonth;
+    
+    return { daysRemaining, totalDays, daysPassed };
   };
 
-  const initialDays = getDaysRemaining(periodeRange);
-  const [daysRemaining, setDaysRemaining] = useState<number>(initialDays);
+  const initialInfo = getPeriodInfo(periodeRange);
+  const [periodInfo, setPeriodInfo] = useState(initialInfo);
 
   // Sync when period range changes
   useEffect(() => {
-    setDaysRemaining(getDaysRemaining(periodeRange));
+    setPeriodInfo(getPeriodInfo(periodeRange));
   }, [periodeRange]);
 
   // Filter valid targets (with a target > 0)
@@ -96,18 +114,9 @@ export const ReportView = ({
   // Math calculations
   const targetVal = activeTarget ? activeTarget.target : 0;
   const actualVal = activeTarget ? activeTarget.actual : 0;
-  const remainingVal = Math.max(targetVal - actualVal, 0);
-
-  const dailyBurden = daysRemaining > 0 ? Math.round(remainingVal / daysRemaining) : 0;
   
-  const daysRemainingTomorrow = daysRemaining - 1;
-  const dailyBurdenTomorrow =
-    daysRemainingTomorrow > 0
-      ? Math.round(remainingVal / daysRemainingTomorrow)
-      : remainingVal;
-
-  const burdenIncrease = Math.max(dailyBurdenTomorrow - dailyBurden, 0);
-  const percentageIncrease = dailyBurden > 0 ? (burdenIncrease / dailyBurden) * 100 : 0;
+  const targetHariIni = periodInfo.totalDays > 0 ? Math.round((targetVal / periodInfo.totalDays) * periodInfo.daysPassed) : 0;
+  const kekurangan = Math.max(targetHariIni - actualVal, 0);
 
   return (
     <div className="w-full bg-white animate-in fade-in duration-700">
@@ -220,20 +229,29 @@ export const ReportView = ({
                 </div>
               )}
 
-              {activeTarget && remainingVal > 0 ? (
+              {activeTarget && targetVal > 0 ? (
                 <div className="flex flex-col items-center mb-2">
                   <p className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">
-                    MINIMAL ORDER HARI INI
+                    ORDER IDEAL SAMPAI HARI INI
                   </p>
-                  <p className="text-2xl font-black text-indigo-600 tabular-nums leading-none tracking-tight">
-                    {formatIDRCurrency(dailyBurden)}
+                  <p className="text-2xl font-black text-indigo-600 tabular-nums leading-none tracking-tight mb-2">
+                    {formatIDRCurrency(targetHariIni)}
                   </p>
-                </div>
-              ) : activeTarget ? (
-                <div className="mb-2">
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs md:text-sm text-emerald-800 font-bold">
-                    Target {activeTarget.title} tercapai!
-                  </div>
+                  {kekurangan > 0 ? (
+                    <div className="bg-rose-50 border border-rose-100 rounded-md px-3 py-1.5 flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                      <span className="text-xs font-bold text-rose-800">
+                        Kekurangan order: {formatIDRCurrency(kekurangan)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-md px-3 py-1.5 flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="text-xs font-bold text-emerald-800">
+                        Progres on track!
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>

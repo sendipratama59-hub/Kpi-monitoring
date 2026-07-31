@@ -106,6 +106,17 @@ ALTER TABLE IF EXISTS salesman_customer ADD COLUMN IF NOT EXISTS upload_month TE
 ALTER TABLE IF EXISTS salesman_customer ADD COLUMN IF NOT EXISTS upload_year TEXT;
 ALTER TABLE IF EXISTS salesman_customer ADD COLUMN IF NOT EXISTS tanggal_pindah DATE;
 
+CREATE TABLE IF NOT EXISTS salesman_idle_customer (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  salesman_code TEXT,
+  salesman_name TEXT,
+  customer_code TEXT,
+  customer_name TEXT,
+  upload_month TEXT,
+  upload_year TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 
 -- 7. Sales Survey Targets
 CREATE TABLE IF NOT EXISTS sales_survey_targets (
@@ -140,10 +151,17 @@ CREATE TABLE IF NOT EXISTS database_barang (
   goods_name TEXT,
   warna TEXT,
   category TEXT,
+  isi_lcd INTEGER DEFAULT 0,
+  isi_tg INTEGER DEFAULT 0,
+  isi_hydrogel INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- MIGRATION: Rename columns in database_barang
+-- MIGRATION: Rename and add columns in database_barang
+ALTER TABLE IF EXISTS database_barang ADD COLUMN IF NOT EXISTS isi_lcd INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS database_barang ADD COLUMN IF NOT EXISTS isi_tg INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS database_barang ADD COLUMN IF NOT EXISTS isi_hydrogel INTEGER DEFAULT 0;
+
 DO $$ 
 BEGIN 
   -- Rename kode_barang to goods_code
@@ -275,6 +293,7 @@ ALTER TABLE dynamic_apps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dynamic_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE database_barang ENABLE ROW LEVEL SECURITY;
 ALTER TABLE retur_barang ENABLE ROW LEVEL SECURITY;
+ALTER TABLE salesman_idle_customer ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow all operations for upload_logs" ON upload_logs;
 CREATE POLICY "Allow all operations for upload_logs" ON upload_logs FOR ALL USING (true) WITH CHECK (true);
@@ -290,6 +309,9 @@ CREATE POLICY "Allow all operations for survey_channel" ON survey_channel FOR AL
 
 DROP POLICY IF EXISTS "Allow all operations for salesman_customer" ON salesman_customer;
 CREATE POLICY "Allow all operations for salesman_customer" ON salesman_customer FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all operations for salesman_idle_customer" ON salesman_idle_customer;
+CREATE POLICY "Allow all operations for salesman_idle_customer" ON salesman_idle_customer FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow all operations for sales_survey_targets" ON sales_survey_targets;
 CREATE POLICY "Allow all operations for sales_survey_targets" ON sales_survey_targets FOR ALL USING (true) WITH CHECK (true);
@@ -1224,6 +1246,8 @@ CREATE INDEX IF NOT EXISTS idx_program_bulanan_period_sm ON program_bulanan(peri
 CREATE INDEX IF NOT EXISTS idx_program_spu_period_sm ON program_spu(period_month, period_year, salesman_code);
 CREATE INDEX IF NOT EXISTS idx_salesman_manual_period_sm ON salesman_manual_activities(period_month, period_year, salesman_code);
 CREATE INDEX IF NOT EXISTS idx_piutang_cust_period_sm ON piutang_customer(period_month, period_year, salesman_code);
+CREATE INDEX IF NOT EXISTS idx_salesman_idle_customer_period ON salesman_idle_customer(upload_month, upload_year);
+CREATE INDEX IF NOT EXISTS idx_salesman_idle_customer_sm ON salesman_idle_customer(salesman_code);
 
 -- 36. Salesman Passwords
 CREATE TABLE IF NOT EXISTS salesman_passwords (
@@ -1236,6 +1260,61 @@ CREATE TABLE IF NOT EXISTS salesman_passwords (
 DROP POLICY IF EXISTS "Allow all operations for salesman_passwords" ON salesman_passwords;
 CREATE POLICY "Allow all operations for salesman_passwords" ON salesman_passwords FOR ALL USING (true) WITH CHECK (true);
 ALTER TABLE salesman_passwords ENABLE ROW LEVEL SECURITY;
+
+-- 37. Recalculate KPI Achievements RPC Function
+CREATE OR REPLACE FUNCTION recalculate_kpi_achievements(p_month INTEGER, p_year INTEGER)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    -- 1. Reset metrics to 0 for the period first to avoid stale data
+    UPDATE salesman_kpi k
+    SET tg_pcs = 0,
+        hydrogel_pcs = 0,
+        co_tg = 0,
+        co_mesin_vqm = 0,
+        idle_customer = 0
+    WHERE k.period_month = p_month AND k.period_year = p_year;
+
+    -- 2. Calculate tg_pcs and hydrogel_pcs using database_barang
+    UPDATE salesman_kpi k
+    SET tg_pcs = COALESCE(db.isi_tg, 0) * COALESCE(k.qty, 0),
+        hydrogel_pcs = COALESCE(db.isi_hydrogel, 0) * COALESCE(k.qty, 0)
+    FROM database_barang db
+    WHERE REGEXP_REPLACE(TRIM(k.goods_code), '\.0$', '') = REGEXP_REPLACE(TRIM(db.goods_code), '\.0$', '')
+      AND k.period_month = p_month 
+      AND k.period_year = p_year;
+
+    -- 3. Calculate co_tg: if tg_pcs > 0, then co_tg = 1
+    UPDATE salesman_kpi k
+    SET co_tg = 1
+    WHERE k.period_month = p_month 
+      AND k.period_year = p_year 
+      AND COALESCE(k.tg_pcs, 0) > 0;
+
+    -- 4. Calculate co_mesin_vqm: if goods_code matches any in list, co_mesin_vqm = 1
+    UPDATE salesman_kpi k
+    SET co_mesin_vqm = 1
+    WHERE k.period_month = p_month 
+      AND k.period_year = p_year 
+      AND k.goods_code IN ('104446', '109289', '110342', '10007928', '10009356', '10022393', '10037529');
+
+    -- 5. Calculate idle_customer: match customer_code with salesman_idle_customer for the period
+    UPDATE salesman_kpi k
+    SET idle_customer = 1
+    WHERE k.period_month = p_month 
+      AND k.period_year = p_year 
+      AND k.customer_code IS NOT NULL 
+      AND EXISTS (
+          SELECT 1 
+          FROM salesman_idle_customer ic 
+          WHERE ic.customer_code = k.customer_code 
+            AND ic.upload_month = LPAD(p_month::text, 2, '0') 
+            AND ic.upload_year = p_year::text
+      );
+END;
+$$;
 
 
 `;

@@ -22,7 +22,7 @@ export function ProductModal({
   return (
     <AnimatePresence>
       {viewProduct && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
           {/* Mobile bottom sheet overlay dismissal (click outside) */}
           <div 
             className="absolute inset-0 z-0" 
@@ -94,7 +94,7 @@ export function ProductModal({
                   </div>
 
                   {/* ULTRA-COMPACT MOBILE LIST VIEW */}
-                  <div className="sm:hidden flex flex-col divide-y divide-slate-100">
+                  <div className="sm:hidden flex flex-col divide-y divide-slate-100 pb-10">
                     {viewProduct.products.map((p: any, idx: number) => {
                       const isDown = p.omset_current < p.omset_last;
                       const diff = p.omset_current - p.omset_last;

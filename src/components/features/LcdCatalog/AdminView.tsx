@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../ui/Card';
 import { Button } from '../../ui/Button';
-import { Search, Loader2, Edit, Trash2, Plus, MonitorSmartphone, UploadCloud, FileSpreadsheet, CheckCircle2, AlertCircle, Share2, Link as LinkIcon, Copy, Download, Check } from 'lucide-react';
+import { Search, Loader2, Edit, Trash2, Plus, MonitorSmartphone, UploadCloud, FileSpreadsheet, CheckCircle2, AlertCircle, Share2, Link as LinkIcon, Copy, Download, Check, ClipboardList } from 'lucide-react';
 import { supabase } from '../../../services/supabase';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
@@ -10,6 +10,8 @@ import { GenieModal } from '../../ui/GenieModal';
 import { VisitorsTab } from './VisitorsTab';
 import { buildLcdCatalogListHtml } from './buildLcdCatalogListHtml';
 import { buildSimplePricelistHtml } from './buildSimplePricelistHtml';
+import { buildVioPricelistHtml } from './buildVioPricelistHtml';
+import { buildSurveyLcdHtml } from './buildSurveyLcdHtml';
 
 interface LcdProduct {
   id?: string;
@@ -973,6 +975,18 @@ export function AdminLcdCatalog() {
     setPreviewTitle(`Pricelist_LCD_Diskon_${discount}.html`);
   };
 
+  const handlePreviewVio = () => {
+    const html = buildVioPricelistHtml(import.meta.env.VITE_SUPABASE_URL || '', import.meta.env.VITE_SUPABASE_ANON_KEY || '');
+    setPreviewHtml(html);
+    setPreviewTitle(`Pricelist_LCD_Vio.html`);
+  };
+
+  const handlePreviewSurvey = () => {
+    const html = buildSurveyLcdHtml(import.meta.env.VITE_SUPABASE_URL || '', import.meta.env.VITE_SUPABASE_ANON_KEY || '');
+    setPreviewHtml(html);
+    setPreviewTitle(`Survey_LCD_Teknisi.html`);
+  };
+
   const handleCopyLink = () => {
     const url = `https://kpi-monitoring-dashboard-670271053581.asia-southeast1.run.app/?view=catalog-lcd&shared=true`;
     navigator.clipboard.writeText(url);
@@ -1059,6 +1073,20 @@ export function AdminLcdCatalog() {
                     <span>Preview {d}%</span>
                   </button>
                 ))}
+                <button 
+                  onClick={handlePreviewVio}
+                  className="text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-100 px-2 py-1.5 rounded-md flex items-center gap-1 font-bold transition-colors border border-slate-700 shadow-sm"
+                >
+                  <MonitorSmartphone className="w-3 h-3" />
+                  <span>Preview Vio</span>
+                </button>
+                <button 
+                  onClick={handlePreviewSurvey}
+                  className="text-[10px] bg-emerald-700 hover:bg-emerald-600 text-emerald-100 px-2 py-1.5 rounded-md flex items-center gap-1 font-bold transition-colors border border-emerald-700 shadow-sm"
+                >
+                  <ClipboardList className="w-3 h-3" />
+                  <span>Survey Teknisi</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1096,6 +1124,20 @@ export function AdminLcdCatalog() {
                   <span>{d}%</span>
                 </button>
               ))}
+              <button 
+                onClick={handlePreviewVio}
+                className="flex-[1_1_calc(25%-0.375rem)] justify-center text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-100 py-2 rounded-lg flex items-center gap-1 font-bold transition-colors border border-slate-700 shadow-sm"
+              >
+                <MonitorSmartphone className="w-3 h-3 hidden sm:block" />
+                <span>Vio</span>
+              </button>
+              <button 
+                onClick={handlePreviewSurvey}
+                className="flex-[1_1_calc(25%-0.375rem)] justify-center text-[10px] bg-emerald-800 hover:bg-emerald-700 text-emerald-100 py-2 rounded-lg flex items-center gap-1 font-bold transition-colors border border-emerald-700 shadow-sm"
+              >
+                <ClipboardList className="w-3 h-3 hidden sm:block" />
+                <span>Survey</span>
+              </button>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:flex lg:flex-wrap bg-indigo-700/50 p-1 rounded-lg w-full xl:w-auto gap-1">

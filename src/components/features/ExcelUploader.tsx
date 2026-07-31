@@ -294,8 +294,17 @@ export function ExcelUploader() {
           if (kpiError) throw new Error(`Chunk Error: ${kpiError.message}`);
         }
 
+        // Automatically trigger calculation of KPI achievements from raw data and database_barang
+        const { error: recalcError } = await supabase.rpc("recalculate_kpi_achievements", {
+          p_month: periodMonth,
+          p_year: periodYear,
+        });
+        if (recalcError) {
+          console.error("Gagal menjalankan recalculate_kpi_achievements:", recalcError);
+        }
+
         showAlert(
-          `✅ ${kpiDataToInsert.length} baris data berhasil disimpan ke database (salesman_kpi)!`,
+          `✅ ${kpiDataToInsert.length} baris data berhasil disimpan ke database (salesman_kpi) dan pencapaian KPI otomatis dihitung!`,
           "success",
         );
       } else if (uploadType === "payment") {

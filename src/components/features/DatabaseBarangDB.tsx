@@ -14,6 +14,9 @@ interface DatabaseBarang {
   goods_name: string;
   warna: string;
   category: string;
+  isi_lcd?: number;
+  isi_tg?: number;
+  isi_hydrogel?: number;
 }
 
 export function DatabaseBarangDB() {
@@ -119,12 +122,22 @@ export function DatabaseBarangDB() {
           return '';
         };
 
+        const getNumVal = (possibleKeys: string[]) => {
+          const val = getVal(possibleKeys);
+          if (val === undefined || val === null || val === '') return 0;
+          const parsed = Number(val);
+          return isNaN(parsed) ? 0 : parsed;
+        };
+
         return {
           id: Math.random().toString(), // assign temporary ID for mapping
           goods_code: String(getVal(['kode barang', 'kode_barang', 'kode', 'goods_code', 'goods code']) || ''),
           goods_name: String(getVal(['nama barang', 'nama_barang', 'nama', 'goods_name', 'goods name']) || ''),
           warna: String(getVal(['warna', 'color']) || ''),
           category: String(getVal(['kategori', 'category']) || ''),
+          isi_lcd: getNumVal(['isi lcd', 'isi_lcd', 'isi-lcd', 'islcd', 'isilcd']),
+          isi_tg: getNumVal(['isi tg', 'isi_tg', 'isi-tg', 'istg', 'isitg', 'tempered glass', 'tempered_glass', 'isi tempered glass', 'isi_tempered_glass']),
+          isi_hydrogel: getNumVal(['isi hydrogel', 'isi_hydrogel', 'isi-hydrogel', 'ishydrogel', 'isihydrogel', 'hydrogel', 'isi_hydro', 'isi-hydro']),
         };
       }).filter(item => item.goods_code || item.goods_name);
 
@@ -162,6 +175,23 @@ export function DatabaseBarangDB() {
         const batch = dataToInsert.slice(i, i + BATCH_SIZE);
         const { error: insertError } = await supabase.from('database_barang').upsert(batch, { onConflict: 'goods_code' });
         if (insertError) throw insertError;
+      }
+
+      // Automatically trigger recalculation of KPI achievements for current and previous month
+      try {
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        let prevMonth = currentMonth - 1;
+        let prevYear = currentYear;
+        if (prevMonth === 0) {
+          prevMonth = 12;
+          prevYear -= 1;
+        }
+        await supabase.rpc('recalculate_kpi_achievements', { p_month: currentMonth, p_year: currentYear });
+        await supabase.rpc('recalculate_kpi_achievements', { p_month: prevMonth, p_year: prevYear });
+      } catch (rpcErr) {
+        console.error('Gagal menjalankan recalculate_kpi_achievements otomatis:', rpcErr);
       }
 
       await fetchData(); // This will also reset previewData
@@ -333,26 +363,29 @@ export function DatabaseBarangDB() {
             />
             <CardContent className="p-0 flex-1 relative min-h-[400px]">
               <div className="absolute inset-0 overflow-auto">
-                <table className="w-full text-sm text-left whitespace-nowrap">
+                 <table className="w-full text-sm text-left whitespace-nowrap">
                   <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b sticky top-0 z-10">
                     <tr>
                       <th className="px-4 py-3">Goods Code</th>
                       <th className="px-4 py-3">Goods Name</th>
                       <th className="px-4 py-3">Warna</th>
                       <th className="px-4 py-3">Category</th>
+                      <th className="px-4 py-3 text-right">Isi LCD</th>
+                      <th className="px-4 py-3 text-right">Isi TG</th>
+                      <th className="px-4 py-3 text-right">Isi Hydrogel</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                           Memuat data...
                         </td>
                       </tr>
                     ) : paginatedData.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                           Belum ada data atau tidak ditemukan.
                         </td>
                       </tr>
@@ -363,6 +396,9 @@ export function DatabaseBarangDB() {
                           <td className="px-4 py-3 text-slate-900">{row.goods_name}</td>
                           <td className="px-4 py-3 text-slate-700">{row.warna}</td>
                           <td className="px-4 py-3 font-medium text-slate-500">{row.category}</td>
+                          <td className="px-4 py-3 text-right font-medium text-slate-700">{row.isi_lcd ?? 0}</td>
+                          <td className="px-4 py-3 text-right font-medium text-slate-700">{row.isi_tg ?? 0}</td>
+                          <td className="px-4 py-3 text-right font-medium text-slate-700">{row.isi_hydrogel ?? 0}</td>
                         </tr>
                       ))
                     )}

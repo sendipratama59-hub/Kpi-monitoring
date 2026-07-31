@@ -11,7 +11,8 @@ import {
   MapPin,
   ArrowLeft,
   FileSpreadsheet,
-  Search
+  Search,
+  Presentation
 } from "lucide-react";
 import { RevenueAnalysis } from "../features/RevenueAnalysis";
 import { SalesmanKpiReport } from "../features/SalesmanKpiReport";
@@ -22,6 +23,7 @@ import { BudgetDinas } from "../features/BudgetDinas";
 import MapsAnalyzer from "../features/MapsAnalyzer";
 import { LiveExcel } from "../features/LiveExcel";
 import { CustomerAnalysis } from "../features/CustomerAnalysis";
+import { MeetingReportExporter } from "../features/MeetingReportExporter";
 
 interface MobileAppLayoutProps {
   onLogout: () => void;
@@ -29,7 +31,7 @@ interface MobileAppLayoutProps {
 
 export function MobileAppLayout({ onLogout }: MobileAppLayoutProps) {
   const [activeTab, setActiveTab] = useState("omset");
-  const [activeTool, setActiveTool] = useState<"menu" | "customer" | "retur" | "budget" | "maps-preview" | "live-excel">("menu");
+  const [activeTool, setActiveTool] = useState<"menu" | "customer" | "retur" | "budget" | "maps-preview" | "live-excel" | "ppt-export">("menu");
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
@@ -43,7 +45,7 @@ export function MobileAppLayout({ onLogout }: MobileAppLayoutProps) {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const handleOpenTool = (tool: "customer" | "retur" | "budget" | "maps-preview" | "live-excel") => {
+  const handleOpenTool = (tool: "customer" | "retur" | "budget" | "maps-preview" | "live-excel" | "ppt-export") => {
     window.history.pushState({ tool }, "");
     setActiveTool(tool);
   };
@@ -170,6 +172,22 @@ export function MobileAppLayout({ onLogout }: MobileAppLayoutProps) {
             </div>
 
             <div
+              onClick={() => handleOpenTool("ppt-export")}
+              className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer active:scale-95 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-rose-50 rounded-lg flex items-center justify-center text-rose-600">
+                  <Presentation className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Wook PPT Exporter</h3>
+                  <p className="text-[10px] text-slate-500">Ekspor Laporan Kerja &amp; Plan Bulanan (PDF)</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            </div>
+
+            <div
               onClick={onLogout}
               className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer active:scale-95 transition-all mt-6"
             >
@@ -206,6 +224,10 @@ export function MobileAppLayout({ onLogout }: MobileAppLayoutProps) {
 
           <div style={getDisplayStyle(activeTool === "maps-preview")} className="pb-24">
             <MapsAnalyzer isMobilePreviewOnly={true} />
+          </div>
+
+          <div style={getDisplayStyle(activeTool === "ppt-export")} className="pb-24">
+            <MeetingReportExporter onBack={handleCloseTool} />
           </div>
         </div>
       </div>

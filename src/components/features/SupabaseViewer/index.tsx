@@ -5,7 +5,7 @@ import { Card, CardContent } from '../../ui/Card';
 
 const TABLES = [
   'profiles', 'upload_logs', 'sales_data', 'kpi_targets', 'survey_channel', 
-  'salesman_customer', 'sales_survey_targets', 'dynamic_apps', 'dynamic_data', 
+  'salesman_customer', 'salesman_idle_customer', 'sales_survey_targets', 'dynamic_apps', 'dynamic_data', 
   'database_barang', 'retur_barang', 'lcd_catalog_products', 'lcd_catalog_content', 
   'salesman_kpi', 'salesman_kpi_targets', 'salesman_payments', 'report_lcd', 
   'program_bulanan', 'program_spu', 'app_guides', 'form_placeholders', 

@@ -231,13 +231,13 @@ export function useRevenueData(periodMonth: number, periodYear: number, selected
 
       const result = Array.from(brandMap.values()).map((b) => {
         let customerDetails = Array.from(b.customers.values())
-          .filter((c: any) => c.omset_current !== c.omset_last || c.omset_current !== c.omset_two_months_ago)
+          .filter((c: any) => c.omset_current !== 0 || c.omset_last !== 0 || c.omset_two_months_ago !== 0)
           .map((c: any) => ({
             ...c,
             diff_amount: c.omset_current - c.omset_last,
             is_down: c.omset_current < c.omset_last,
             products: Array.from(c.products.values())
-              .filter((p: any) => p.omset_current !== p.omset_last || p.omset_current !== p.omset_two_months_ago)
+              .filter((p: any) => p.omset_current !== 0 || p.omset_last !== 0 || p.omset_two_months_ago !== 0)
               .sort((p1: any, p2: any) => p1.omset_current - p1.omset_last - (p2.omset_current - p2.omset_last)),
           }))
           .sort((a, b) => a.diff_amount - b.diff_amount);

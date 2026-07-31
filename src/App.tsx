@@ -12,6 +12,7 @@ import MapsAnalyzer from "./components/features/MapsAnalyzer";
 import FormCodTempo from "./components/features/FormCodTempo";
 import { SalesmanCustomerDB } from "./components/features/SalesmanCustomerDB";
 import { DatabaseBarangDB } from "./components/features/DatabaseBarangDB";
+import { IdleCustomerDB } from "./components/features/IdleCustomerDB";
 import { SalesmanKpiReport } from "./components/features/SalesmanKpiReport";
 import { KpiTargetSetup } from "./components/features/KpiTargetSetup";
 import { Documentation } from "./components/features/Documentation";
@@ -592,6 +593,7 @@ export default function App() {
           {currentView === "form-cod" && <FormCodTempo />}
           {currentView === "db-sales-customer" && <SalesmanCustomerDB />}
           {currentView === "db-barang" && <DatabaseBarangDB />}
+          {currentView === "db-idle-customer" && <IdleCustomerDB />}
           {currentView === "dashboard" && <Dashboard />}
           {currentView === "salesman-dashboard" && <SalesmanDashboard />}
           {currentView === "upload" && <ExcelUploader />}

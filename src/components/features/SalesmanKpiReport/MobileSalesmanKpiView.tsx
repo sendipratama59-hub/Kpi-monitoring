@@ -229,20 +229,44 @@ export function MobileSalesmanKpiView({
     setSearchCustomer("");
     setDetailLoading(true);
 
+    // Inner helper to fetch all records with automatic pagination to bypass 1,000 limits
+    const fetchWithPagination = async (table: string, filters: Record<string, any>) => {
+      let allData: any[] = [];
+      let hasMore = true;
+      let from = 0;
+      while (hasMore) {
+        let query = supabase
+          .from(table)
+          .select("*")
+          .range(from, from + 999);
+        for (const [key, val] of Object.entries(filters)) {
+          query = query.eq(key, val);
+        }
+        const { data, error } = await query;
+        if (error) {
+          throw error;
+        }
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          if (data.length < 1000) hasMore = false;
+          else from += 1000;
+        } else {
+          hasMore = false;
+        }
+      }
+      return allData;
+    };
+
     try {
       const trimmedCode = salesmanCode.trim();
 
       if (metric.id.startsWith("payment")) {
-        // Query payments
-        let q = supabase
-          .from("salesman_payments")
-          .select("*")
-          .eq("period_month", periodMonth)
-          .eq("period_year", periodYear)
-          .eq("salesman_code", trimmedCode);
-        
-        const { data, error } = await q;
-        if (error) throw error;
+        // Query payments with pagination
+        const data = await fetchWithPagination("salesman_payments", {
+          period_month: periodMonth,
+          period_year: periodYear,
+          salesman_code: trimmedCode
+        });
 
         // Apply custom metric filter
         let filtered = data || [];
@@ -264,21 +288,24 @@ export function MobileSalesmanKpiView({
 
         let lcdOmsetData = [];
         if (metric.id === "payment_3c_lcd") {
-          const { data: kpiData, error: kpiError } = await supabase
-            .from("salesman_kpi")
-            .select("*")
-            .eq("period_month", periodMonth)
-            .eq("period_year", periodYear)
-            .eq("salesman_code", trimmedCode);
-          
-          if (!kpiError && kpiData) {
-            lcdOmsetData = kpiData.filter(p => {
-              const bName = (p.brand_name || "").toLowerCase().trim();
-              const cat = (p.category || "").toLowerCase().trim();
-              const isLcdTeamCategory = (bName === 'vivan' || bName === 'xpas') && validLcdCats.includes(cat);
-              const isLcdOmset = (bName === 'xpas' || bName === 'vivan') && cat === 'screen assembly';
-              return isLcdOmset || isLcdTeamCategory;
+          try {
+            const kpiData = await fetchWithPagination("salesman_kpi", {
+              period_month: periodMonth,
+              period_year: periodYear,
+              salesman_code: trimmedCode
             });
+            
+            if (kpiData) {
+              lcdOmsetData = kpiData.filter(p => {
+                const bName = (p.brand_name || "").toLowerCase().trim();
+                const cat = (p.category || "").toLowerCase().trim();
+                const isLcdTeamCategory = (bName === 'vivan' || bName === 'xpas') && validLcdCats.includes(cat);
+                const isLcdOmset = (bName === 'xpas' || bName === 'vivan') && cat === 'screen assembly';
+                return isLcdOmset || isLcdTeamCategory;
+              });
+            }
+          } catch (kpiError) {
+            console.error("Error loading payment 3c kpi fallback data:", kpiError);
           }
         }
 
@@ -303,16 +330,13 @@ export function MobileSalesmanKpiView({
 
         setCustomerDetails(Array.from(groupedMap.values()).sort((a, b) => b.value - a.value));
       } else if (metric.id.startsWith("program")) {
-        // Query programs
+        // Query programs with pagination
         const table = metric.id === "program_bulanan_achieved" ? "program_bulanan" : "program_spu";
-        const { data, error } = await supabase
-          .from(table)
-          .select("*")
-          .eq("period_month", periodMonth)
-          .eq("period_year", periodYear)
-          .eq("salesman_code", trimmedCode);
-        
-        if (error) throw error;
+        const data = await fetchWithPagination(table, {
+          period_month: periodMonth,
+          period_year: periodYear,
+          salesman_code: trimmedCode
+        });
 
         const list = (data || []).map((p: any) => ({
           customer_code: p.customer_code || "",
@@ -326,17 +350,14 @@ export function MobileSalesmanKpiView({
 
         setCustomerDetails(list);
       } else if (metric.id === "perbaikan_display" || metric.id === "pemasangan_spanduk") {
-        // Query manual activities
+        // Query manual activities with pagination
         const actType = metric.id === "perbaikan_display" ? "perbaikan_display" : "pemasangan_spanduk_stiker";
-        const { data, error } = await supabase
-          .from("salesman_manual_activities")
-          .select("*")
-          .eq("period_month", periodMonth)
-          .eq("period_year", periodYear)
-          .eq("salesman_code", trimmedCode)
-          .eq("activity_type", actType);
-
-        if (error) throw error;
+        const data = await fetchWithPagination("salesman_manual_activities", {
+          period_month: periodMonth,
+          period_year: periodYear,
+          salesman_code: trimmedCode,
+          activity_type: actType
+        });
 
         const groupedMap = new Map<string, any>();
         (data || []).forEach(p => {
@@ -356,15 +377,12 @@ export function MobileSalesmanKpiView({
 
         setCustomerDetails(Array.from(groupedMap.values()).sort((a, b) => b.value - a.value));
       } else {
-        // Query salesman_kpi
-        let { data, error } = await supabase
-          .from("salesman_kpi")
-          .select("*")
-          .eq("period_month", periodMonth)
-          .eq("period_year", periodYear)
-          .eq("salesman_code", trimmedCode);
-
-        if (error) throw error;
+        // Query salesman_kpi with pagination
+        const data = await fetchWithPagination("salesman_kpi", {
+          period_month: periodMonth,
+          period_year: periodYear,
+          salesman_code: trimmedCode
+        });
 
         let filtered = data || [];
         if (salesmanCode && smData?.salesman_name) {
@@ -395,34 +413,18 @@ export function MobileSalesmanKpiView({
         } else if (metric.id === "tg_pcs") {
           filtered = filtered.filter(s => (Number(s.tg_pcs) || 0) > 0);
         } else if (metric.id === "new_customers") {
-          const newCustKeys = new Set(filtered.filter(s => {
+          filtered = filtered.filter(s => {
             const bName = (s.brand_name || "").toLowerCase().trim();
             const cat = (s.category || "").toLowerCase().trim();
             const isLcdTeamCategory = (bName === 'vivan' || bName === 'xpas') && validLcdCats.includes(cat);
             return (Number(s.new_customer) || 0) > 0 && brandsGeneral.includes(bName) && !isLcdTeamCategory;
-          }).map(s => s.customer_code || s.customer_name || "unknown"));
-
-          filtered = filtered.filter(s => {
-            const bName = (s.brand_name || "").toLowerCase().trim();
-            const cat = (s.category || "").toLowerCase().trim();
-            const isLcdTeamCategory = (bName === 'vivan' || bName === 'xpas') && validLcdCats.includes(cat);
-            const key = s.customer_code || s.customer_name || "unknown";
-            return newCustKeys.has(key) && brandsGeneral.includes(bName) && !isLcdTeamCategory;
           });
         } else if (metric.id === "idle_customers") {
-          const idleCustKeys = new Set(filtered.filter(s => {
+          filtered = filtered.filter(s => {
             const bName = (s.brand_name || "").toLowerCase().trim();
             const cat = (s.category || "").toLowerCase().trim();
             const isLcdTeamCategory = (bName === 'vivan' || bName === 'xpas') && validLcdCats.includes(cat);
             return (Number(s.idle_customer) || 0) > 0 && brandsGeneral.includes(bName) && !isLcdTeamCategory;
-          }).map(s => s.customer_code || s.customer_name || "unknown"));
-
-          filtered = filtered.filter(s => {
-            const bName = (s.brand_name || "").toLowerCase().trim();
-            const cat = (s.category || "").toLowerCase().trim();
-            const isLcdTeamCategory = (bName === 'vivan' || bName === 'xpas') && validLcdCats.includes(cat);
-            const key = s.customer_code || s.customer_name || "unknown";
-            return idleCustKeys.has(key) && brandsGeneral.includes(bName) && !isLcdTeamCategory;
           });
         } else if (metric.id === "co_mesin_vqm") {
           filtered = filtered.filter(s => (Number(s.co_mesin_vqm) || 0) > 0);
@@ -482,8 +484,20 @@ export function MobileSalesmanKpiView({
   };
 
   const getProductBreakdown = (records: any[]) => {
+    let filteredRecords = [...records];
+    
+    if (selectedMetricForDetail) {
+      if (selectedMetricForDetail.id === 'co_tg' || selectedMetricForDetail.id === 'tg_pcs') {
+        filteredRecords = filteredRecords.filter(r => (Number(r.tg_pcs) || 0) > 0);
+      } else if (selectedMetricForDetail.id === 'hydrogel_pcs') {
+        filteredRecords = filteredRecords.filter(r => (Number(r.hydrogel_pcs) || 0) > 0);
+      } else if (selectedMetricForDetail.id === 'co_mesin_vqm') {
+        filteredRecords = filteredRecords.filter(r => (Number(r.co_mesin_vqm) || 0) > 0);
+      }
+    }
+
     const prodMap = new Map<string, any>();
-    records.forEach(r => {
+    filteredRecords.forEach(r => {
       const pName = r.goods_name || r.product_name || "Produk Lainnya";
       if (!prodMap.has(pName)) {
         prodMap.set(pName, {
@@ -493,7 +507,13 @@ export function MobileSalesmanKpiView({
         });
       }
       const item = prodMap.get(pName);
-      item.qty += Number(r.qty) || Number(r.qty_order) || 0;
+      if (selectedMetricForDetail?.id === 'tg_pcs' || selectedMetricForDetail?.id === 'co_tg') {
+        item.qty += Number(r.tg_pcs) || 0;
+      } else if (selectedMetricForDetail?.id === 'hydrogel_pcs') {
+        item.qty += Number(r.hydrogel_pcs) || 0;
+      } else {
+        item.qty += Number(r.qty) || Number(r.qty_order) || 0;
+      }
       item.total_amount += Number(r.total_amount) || 0;
     });
     return Array.from(prodMap.values()).sort((a, b) => b.total_amount - a.total_amount);
@@ -1102,7 +1122,7 @@ export function MobileSalesmanKpiView({
                               </div>
                               <div className="text-right shrink-0 pl-2">
                                 <p className="text-xs font-black text-slate-900">
-                                  {selectedMetricForDetail.format === 'currency'
+                                  {selectedMetricForDetail.format === 'currency' || ['co_tg', 'co_mesin_vqm', 'new_customers', 'idle_customers', 'omset_5jt'].includes(selectedMetricForDetail.id)
                                     ? formatCurrency(c.value)
                                     : `${c.value.toLocaleString('id-ID')} ${selectedMetricForDetail.suffix || ''}`}
                                 </p>
@@ -1130,7 +1150,7 @@ export function MobileSalesmanKpiView({
                       <div className="text-right">
                         <p className="text-[9px] text-slate-400 font-black uppercase">Total Kontribusi</p>
                         <p className="font-black text-indigo-600 text-sm">
-                          {selectedMetricForDetail.format === 'currency'
+                          {selectedMetricForDetail.format === 'currency' || ['co_tg', 'co_mesin_vqm', 'new_customers', 'idle_customers', 'omset_5jt'].includes(selectedMetricForDetail.id)
                             ? formatCurrency(selectedCustomerForDetail.value)
                             : `${selectedCustomerForDetail.value.toLocaleString('id-ID')} ${selectedMetricForDetail.suffix || ''}`}
                         </p>

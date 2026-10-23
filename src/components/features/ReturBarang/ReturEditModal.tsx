@@ -21,6 +21,8 @@ export function ReturEditModal({ record, isOpen, onClose, onSuccess, categories 
   const [category, setCategory] = useState('');
   const [qty, setQty] = useState(1);
   const [description, setDescription] = useState('');
+  const [noSo, setNoSo] = useState('');
+  const [noSd, setNoSd] = useState('');
   const [loading, setLoading] = useState(false);
   const [showCatDropdown, setShowCatDropdown] = useState(false);
 
@@ -36,6 +38,8 @@ export function ReturEditModal({ record, isOpen, onClose, onSuccess, categories 
       setCategory(record.category || '');
       setQty(record.qty || 1);
       setDescription(record.description || '');
+      setNoSo(record.no_so || '');
+      setNoSd(record.no_sd || '');
     }
   }, [record]);
 
@@ -53,7 +57,9 @@ export function ReturEditModal({ record, isOpen, onClose, onSuccess, categories 
         goods_name: goodsName,
         category: category,
         qty: qty,
-        description: description
+        description: description,
+        no_so: noSo || null,
+        no_sd: noSd || null
       }).eq('id', record.id);
 
       if (error) throw error;
@@ -120,6 +126,29 @@ export function ReturEditModal({ record, isOpen, onClose, onSuccess, categories 
               onChange={(e) => setGoodsName(e.target.value)}
               className="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No SO</label>
+              <input 
+                type="text"
+                value={noSo}
+                placeholder="No SO..."
+                onChange={(e) => setNoSo(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No SD</label>
+              <input 
+                type="text"
+                value={noSd}
+                placeholder="No SD..."
+                onChange={(e) => setNoSd(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none"
+              />
+            </div>
           </div>
 
           <div className="space-y-2 relative">

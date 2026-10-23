@@ -231,10 +231,44 @@ ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS replacement_goods_na
 ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS replacement_qty INTEGER DEFAULT 0;
 ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS kategori TEXT;
 ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS salesman_code TEXT;
+ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS retur_type TEXT DEFAULT 'all';
+ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS no_so TEXT;
+ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS no_sd TEXT;
 
 DROP POLICY IF EXISTS "Allow all operations for retur_barang" ON retur_barang;
 CREATE POLICY "Allow all operations for retur_barang" ON retur_barang FOR ALL USING (true) WITH CHECK (true);
 ALTER TABLE retur_barang ENABLE ROW LEVEL SECURITY;
+
+-- 22b. Database LCD
+CREATE TABLE IF NOT EXISTS database_lcd (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  kode_barang TEXT,
+  nama_barang TEXT,
+  kode_customer TEXT,
+  nama_customer TEXT,
+  no_so TEXT,
+  tgl_so DATE,
+  no_sd TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS kode_barang TEXT;
+ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS nama_barang TEXT;
+ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS kode_customer TEXT;
+ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS nama_customer TEXT;
+ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS no_so TEXT;
+ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS tgl_so DATE;
+ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS no_sd TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_database_lcd_no_so ON database_lcd(no_so);
+CREATE INDEX IF NOT EXISTS idx_database_lcd_no_sd ON database_lcd(no_sd);
+CREATE INDEX IF NOT EXISTS idx_database_lcd_cust ON database_lcd(kode_customer);
+CREATE INDEX IF NOT EXISTS idx_database_lcd_prod ON database_lcd(kode_barang);
+
+DROP POLICY IF EXISTS "Allow all operations for database_lcd" ON database_lcd;
+CREATE POLICY "Allow all operations for database_lcd" ON database_lcd FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE database_lcd ENABLE ROW LEVEL SECURITY;
 
 -- 23. LCD Catalog Products
 CREATE TABLE IF NOT EXISTS lcd_catalog_products (

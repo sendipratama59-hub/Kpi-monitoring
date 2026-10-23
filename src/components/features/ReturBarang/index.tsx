@@ -292,10 +292,13 @@ export function ReturBarang({ isShared }: ReturBarangProps) {
         return_date: formData.return_date,
         goods_code: formData.goods_code,
         goods_name: formData.goods_name,
-        category: formData.category,
+        category: formData.retur_type === 'lcd' ? (formData.category || 'LCD') : formData.category,
         qty: formData.qty,
         description: formData.description,
         status: "Pending",
+        retur_type: formData.retur_type || 'all',
+        no_so: formData.no_so || null,
+        no_sd: formData.no_sd || null,
         salesman_code:
           isShared && session
             ? session.salesman_code

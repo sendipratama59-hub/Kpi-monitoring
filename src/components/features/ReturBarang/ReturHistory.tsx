@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 import { ReturProcessModal } from './ReturProcessModal';
 import { ReturEditModal } from './ReturEditModal';
 import { ReturBulkEditModal } from './ReturBulkEditModal';
+import { ReturPrintModal } from './ReturPrintModal';
 import { useAlert } from '../../ui/AlertModal';
 
 interface ReturRecord {
@@ -23,6 +24,9 @@ interface ReturRecord {
   finished_qty: number;
   status: 'Pending' | 'Partial' | 'Completed';
   description: string;
+  retur_type?: string;
+  no_so?: string;
+  no_sd?: string;
   replacement_goods_code?: string;
   replacement_goods_name?: string;
   replacement_qty?: number;
@@ -44,11 +48,20 @@ export function ReturHistory({ categories, isShared, salesmanCode }: ReturHistor
   const [dateStart, setDateStart] = useState('');
   const [dateEnd, setDateEnd] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [returTypeFilter, setReturTypeFilter] = useState('All');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
   const [processingRecord, setProcessingRecord] = useState<ReturRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<ReturRecord | null>(null);
   const [isBulkEditing, setIsBulkEditing] = useState(false);
+  const [printRecords, setPrintRecords] = useState<ReturRecord[]>([]);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  const handleOpenPrintModal = (records: ReturRecord[]) => {
+    if (!records || records.length === 0) return;
+    setPrintRecords(records);
+    setIsPrintModalOpen(true);
+  };
 
   useEffect(() => {
     fetchHistory();
@@ -205,10 +218,16 @@ export function ReturHistory({ categories, isShared, salesmanCode }: ReturHistor
     cleanDesc = cleanDesc.replace(/^,\s*/, '').replace(/,\s*$/, '').trim();
     if (!cleanDesc) cleanDesc = '-';
 
+    const soSdLine = [
+      record.no_so ? `No SO : ${record.no_so}` : '',
+      record.no_sd ? `No SD : ${record.no_sd}` : ''
+    ].filter(Boolean).join('\n');
+
     const text = `Nama toko : ${record.customer_name}
 Kode toko : ${record.customer_code}
 Produk : ${record.goods_name}
-Keterangan : ${cleanDesc}
+Kode Produk : ${record.goods_code || '-'}
+${soSdLine ? `${soSdLine}\n` : ''}Keterangan : ${cleanDesc}
 Qty : ${record.qty}
 @Achmad Sukmara @Dimas Awwaluddin Adha`;
 
@@ -223,6 +242,9 @@ Qty : ${record.qty}
   const exportToExcel = () => {
     const exportData = filteredData.map(item => ({
       'Tanggal Retur': format(new Date(item.return_date), 'dd/MM/yyyy'),
+      'Tipe Retur': item.retur_type === 'lcd' ? 'Produk LCD' : 'All Kategori',
+      'No SO': item.no_so || '-',
+      'No SD': item.no_sd || '-',
       'Kategori': item.category || '-',
       'Kode Customer': item.customer_code,
       'Nama Customer': item.customer_name,
@@ -240,156 +262,7 @@ Qty : ${record.qty}
   };
 
   const handlePrintLabels = (records: ReturRecord[]) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    // Split records into chunks of 24 (A4 size 3x8)
-    const chunks = [];
-    for (let i = 0; i < records.length; i += 24) {
-      chunks.push(records.slice(i, i + 24));
-    }
-
-    const pagesHtml = chunks.map(chunk => {
-      const labelsHtml = chunk.map(record => `
-        <div class="label">
-          <div class="label-inner">
-            <div class="header">
-              <div class="title-box">
-                <div class="title">${record.customer_name}</div>
-                <div class="subtitle">ID: ${record.customer_code}</div>
-              </div>
-              <div class="date">${format(new Date(record.return_date), 'dd/MM/yy')}</div>
-            </div>
-            
-            <div class="prod-info">
-              <div class="name-box">
-                <div class="name">${record.goods_name}</div>
-              </div>
-              <div class="meta">
-                <div class="qty-box">
-                  <span class="qty-label">QTY</span>
-                  <span class="qty-value">${record.qty}</span>
-                </div>
-                <div class="code-box">
-                  <span class="code-label">CODE</span>
-                  <span class="code-value">${record.goods_code}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="footer">
-              <div class="desc">${record.description || '-'}</div>
-            </div>
-          </div>
-        </div>
-      `).join('');
-
-      return `<div class="page">${labelsHtml}</div>`;
-    }).join('');
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Label Retur</title>
-          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-          <style>
-            @page {
-              size: A4;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-            }
-            .page {
-              width: 210mm;
-              height: 297mm;
-              display: grid;
-              grid-template-columns: repeat(3, 1fr);
-              grid-template-rows: repeat(8, 1fr);
-              padding: 5mm;
-              box-sizing: border-box;
-              page-break-after: always;
-            }
-            .label {
-              border: 0.1mm solid #ddd;
-              box-sizing: border-box;
-              overflow: hidden;
-              position: relative;
-              padding: 1.5mm;
-            }
-            .label-inner {
-              border: 1.5px solid #000;
-              border-radius: 4px;
-              height: 100%;
-              width: 100%;
-              padding: 2mm;
-              box-sizing: border-box;
-              display: flex;
-              flex-direction: column;
-              background-color: #fff;
-            }
-            
-            .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-start;
-              border-bottom: 1px solid #eaeaea;
-              padding-bottom: 1mm;
-              margin-bottom: 1mm;
-            }
-            .title-box { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; padding-right: 2mm; }
-            .title { font-size: 8pt; font-weight: 800; letter-spacing: -0.01em; color: #000; text-transform: uppercase; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-            .subtitle { font-size: 6pt; font-weight: 600; color: #555; line-height: 1; }
-            .date { font-size: 6.5pt; font-weight: 800; color: #000; white-space: nowrap; line-height: 1; }
-            
-            .prod-info { margin-bottom: 0; display: flex; flex-direction: column; }
-            .name-box { margin-bottom: 1mm; }
-            .name { font-size: 8pt; font-weight: 600; line-height: 1.1; color: #000; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-            
-            .meta { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid #eaeaea; padding-bottom: 1mm; margin-bottom: 1mm; }
-            
-            .qty-box { display: flex; align-items: baseline; gap: 2px; }
-            .qty-label { font-size: 5pt; font-weight: 800; color: #666; text-transform: uppercase; line-height: 1; }
-            .qty-value { font-size: 10pt; font-weight: 900; color: #000; line-height: 1; }
-            
-            .code-box { display: flex; align-items: baseline; gap: 4px; }
-            .code-label { font-size: 5pt; font-weight: 700; color: #888; text-transform: uppercase; line-height: 1; }
-            .code-value { font-size: 7.5pt; font-weight: 700; color: #222; font-family: 'JetBrains Mono', monospace; line-height: 1; }
-
-            .footer {
-              display: flex;
-              align-items: center;
-              justify-content: flex-start;
-              overflow: hidden;
-              flex: 1;
-            }
-            .desc { font-size: 8pt; font-weight: 600; line-height: 1.1; color: #000; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-transform: uppercase; }
-
-            @media print {
-              .no-print { display: none; }
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="no-print" style="padding: 10px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: center; gap: 10px;">
-            <button onclick="window.print()" style="padding: 8px 20px; background: #4f46e5; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Cetak Sekarang</button>
-            <button onclick="window.close()" style="padding: 8px 20px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Tutup</button>
-          </div>
-          ${pagesHtml}
-          <script>
-            window.addEventListener('load', function() {
-              setTimeout(function() {
-                window.print();
-              }, 800);
-            });
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    handleOpenPrintModal(records);
   };
 
   const filteredData = data.filter(item => {
@@ -397,14 +270,21 @@ Qty : ${record.qty}
       item.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.customer_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.goods_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.goods_code?.toLowerCase().includes(searchTerm.toLowerCase());
+      item.goods_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.no_so?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.no_sd?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'All' || item.status === statusFilter;
     
+    const matchesReturType = 
+      returTypeFilter === 'All' || 
+      (returTypeFilter === 'lcd' && item.retur_type === 'lcd') ||
+      (returTypeFilter === 'all' && item.retur_type !== 'lcd');
+
     const matchesDate = (!dateStart || item.return_date >= dateStart) && 
                        (!dateEnd || item.return_date <= dateEnd);
 
-    return matchesSearch && matchesStatus && matchesDate;
+    return matchesSearch && matchesStatus && matchesReturType && matchesDate;
   });
 
   const getStatusColor = (status: string) => {
@@ -435,11 +315,13 @@ Qty : ${record.qty}
                 size="sm" 
                 onClick={() => {
                   const selectedRecords = data.filter(r => selectedIds.includes(r.id));
-                  handlePrintLabels(selectedRecords);
+                  handleOpenPrintModal(selectedRecords);
                 }}
-                className="rounded-xl border-indigo-200 text-indigo-600 font-bold h-10 px-4 hover:bg-indigo-50"
+                title="Cetak Label Retur"
+                className="rounded-xl border-indigo-200 text-indigo-600 font-bold h-10 px-4 hover:bg-indigo-50 flex items-center gap-1.5"
               >
                 <Printer className="w-4 h-4" />
+                <span className="text-xs">Cetak</span>
               </Button>
               {!isShared && (
                 <>
@@ -504,7 +386,7 @@ Qty : ${record.qty}
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
                 type="text"
-                placeholder="Cari customer/barang..."
+                placeholder="Cari toko, barang, No SO, No SD..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
@@ -533,16 +415,27 @@ Qty : ${record.qty}
               </div>
             </div>
 
-            <select 
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
-            >
-              <option value="All">Semua Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Partial">Partial</option>
-              <option value="Completed">Completed</option>
-            </select>
+            <div className="flex items-center gap-2 col-span-1">
+              <select 
+                value={returTypeFilter}
+                onChange={(e) => setReturTypeFilter(e.target.value as any)}
+                className="w-1/2 px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+              >
+                <option value="All">Semua Tipe</option>
+                <option value="lcd">Khusus LCD</option>
+                <option value="all">Non-LCD</option>
+              </select>
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-1/2 px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-700 focus:ring-2 focus:ring-indigo-500/20"
+              >
+                <option value="All">Semua Status</option>
+                <option value="Pending">Pending</option>
+                <option value="Partial">Partial</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
           </div>
         </CardHeader>
         
@@ -559,7 +452,7 @@ Qty : ${record.qty}
                       className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                     />
                   </th>
-                  <th className="px-6 py-4">Produk</th>
+                  <th className="px-6 py-4">Produk & Type</th>
                   <th className="px-6 py-4">Customer</th>
                   <th className="px-6 py-4 text-center">Qty</th>
                   <th className="px-6 py-4 text-center">Status</th>
@@ -587,12 +480,26 @@ Qty : ${record.qty}
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span className="text-sm font-black text-slate-800">{record.goods_name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-400 tracking-tight">{record.goods_code}</span>
-                            {record.category && (
-                              <span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-1.5 rounded uppercase">{record.category}</span>
-                            )}
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="text-[10px] font-mono font-bold text-slate-500 tracking-tight">
+                              {record.goods_code}
+                            </span>
+                            {record.retur_type === 'lcd' ? (
+                              <span className="text-[8.5px] font-black text-cyan-700 bg-cyan-100 px-1.5 py-0.5 rounded uppercase">
+                                LCD
+                              </span>
+                            ) : record.category ? (
+                              <span className="text-[8.5px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">
+                                {record.category}
+                              </span>
+                            ) : null}
                           </div>
+                          {(record.no_so || record.no_sd) && (
+                            <div className="flex items-center gap-2 mt-1 text-[9.5px] font-bold text-slate-500">
+                              {record.no_so && <span>SO: <strong className="text-slate-700 font-mono">{record.no_so}</strong></span>}
+                              {record.no_sd && <span>SD: <strong className="text-slate-700 font-mono">{record.no_sd}</strong></span>}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -710,6 +617,12 @@ Qty : ${record.qty}
           fetchHistory();
           setSelectedIds([]);
         }}
+      />
+
+      <ReturPrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        records={printRecords}
       />
     </div>
   );

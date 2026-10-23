@@ -48,6 +48,7 @@ export function Sidebar({ currentView, onChangeView }: SidebarProps) {
       subItems: [
         { id: 'db-sales-customer', label: 'Database Sales & Customer' },
         { id: 'db-barang', label: 'Database Barang' },
+        { id: 'db-lcd', label: 'Database LCD' },
         { id: 'db-idle-customer', label: 'Idle Customer' }
       ]
     },

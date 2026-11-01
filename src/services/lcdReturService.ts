@@ -5,7 +5,8 @@ export interface LcdReturItem {
   customer_code: string;
   customer_name: string;
   goods_code: string; // Type / Kode Barang
-  goods_name: string; // Nama Barang
+  goods_name: string; // Combined Name: Brand + Nama Barang (e.g. "iPhone 11 HD+")
+  raw_goods_name?: string; // Original nama_barang (e.g. "11 HD+")
   no_so: string;      // No Sales Order
   no_sd: string;      // No Surat Jalan / Delivery
   tgl_so?: string | null;
@@ -22,6 +23,22 @@ export interface LcdSoSdOption {
   raw_item?: LcdReturItem;
 }
 
+/**
+ * Combines Brand and Nama Barang into a unified product name
+ * Example: brand: "iPhone", nama_barang: "11 HD+" -> "iPhone 11 HD+"
+ */
+export function formatLcdProductName(brand?: string | null, namaBarang?: string | null): string {
+  const b = (brand || '').trim();
+  const n = (namaBarang || '').trim();
+  if (!b) return n;
+  if (!n) return b;
+  // If nama_barang already begins with brand (case-insensitive), avoid duplicate
+  if (n.toLowerCase().startsWith(b.toLowerCase())) {
+    return n;
+  }
+  return `${b} ${n}`;
+}
+
 // Fallback sample data to allow immediate testing if table is empty
 export const FALLBACK_LCD_RECORDS: LcdReturItem[] = [
   {
@@ -29,7 +46,8 @@ export const FALLBACK_LCD_RECORDS: LcdReturItem[] = [
     customer_code: 'CUST-BDG-001',
     customer_name: 'BERKAH CELL BANDUNG',
     goods_code: 'LC-SAM-A50',
-    goods_name: 'LCD SAMSUNG A50 / A50S / A30S OLED HITAM',
+    goods_name: 'Samsung A50 / A50S / A30S OLED HITAM',
+    raw_goods_name: 'A50 / A50S / A30S OLED HITAM',
     no_so: 'SO-2026-0412',
     tgl_so: '2026-04-12',
     no_sd: 'SD-2026-0889',
@@ -41,7 +59,8 @@ export const FALLBACK_LCD_RECORDS: LcdReturItem[] = [
     customer_code: 'CUST-BDG-014',
     customer_name: 'CENTRAL PHONE ITC',
     goods_code: 'LC-OPP-A5S',
-    goods_name: 'LCD OPPO A5S / A7 / A12 / REALME 3 OG CROWN',
+    goods_name: 'Oppo A5S / A7 / A12 / REALME 3 OG CROWN',
+    raw_goods_name: 'A5S / A7 / A12 / REALME 3 OG CROWN',
     no_so: 'SO-2026-0415',
     tgl_so: '2026-04-15',
     no_sd: 'SD-2026-0895',
@@ -53,7 +72,8 @@ export const FALLBACK_LCD_RECORDS: LcdReturItem[] = [
     customer_code: 'CUST-BDG-022',
     customer_name: 'GLOBAL FLASH CELL',
     goods_code: 'LC-IPH-11',
-    goods_name: 'LCD IPHONE 11 INCEL / ZY HITAM',
+    goods_name: 'iPhone 11 HD+',
+    raw_goods_name: '11 HD+',
     no_so: 'SO-2026-0420',
     tgl_so: '2026-04-20',
     no_sd: 'SD-2026-0902',
@@ -65,7 +85,8 @@ export const FALLBACK_LCD_RECORDS: LcdReturItem[] = [
     customer_code: 'CUST-BDG-035',
     customer_name: 'SINAR JAYA TELEKOMUNIKASI',
     goods_code: 'LC-XIA-RN8',
-    goods_name: 'LCD XIAOMI REDMI NOTE 8 MEETOO HITAM',
+    goods_name: 'Xiaomi Redmi Note 8 MEETOO HITAM',
+    raw_goods_name: 'Redmi Note 8 MEETOO HITAM',
     no_so: 'SO-2026-0428',
     tgl_so: '2026-04-28',
     no_sd: 'SD-2026-0914',
@@ -77,9 +98,10 @@ export const FALLBACK_LCD_RECORDS: LcdReturItem[] = [
     customer_code: 'CUST-BDG-048',
     customer_name: 'METRO KOMPUNIKA',
     goods_code: 'LC-VIV-Y12',
-    goods_name: 'LCD VIVO Y12 / Y15 / Y17 CROWN HITAM',
+    goods_name: 'Vivo Y12 / Y15 / Y17 CROWN HITAM',
+    raw_goods_name: 'Y12 / Y15 / Y17 CROWN HITAM',
     no_so: 'SO-2026-0433',
-    tgl_so: '2026-04-33',
+    tgl_so: '2026-04-18',
     no_sd: 'SD-2026-0925',
     brand: 'Vivo',
     category: 'LCD'
@@ -155,19 +177,26 @@ export async function fetchAllLcdRecords(): Promise<LcdReturItem[]> {
       }
 
       if (data && data.length > 0) {
-        const mapped = data.map((item: any) => ({
-          id: item.id,
-          customer_code: item.kode_customer || item.customer_code || item.id_toko || '',
-          customer_name: item.nama_customer || item.customer_name || item.nama_toko || '',
-          goods_code: item.kode_barang || item.goods_code || item.type || '',
-          goods_name: item.nama_barang || item.goods_name || '',
-          no_so: item.no_so || '',
-          tgl_so: item.tgl_so || item.date || item.tanggal || null,
-          no_sd: item.no_sd || item.no_surat_jalan || '',
-          brand: item.brand || item.merk || 'LCD',
-          category: 'LCD',
-          date: item.tgl_so || item.date || item.tanggal || ''
-        }));
+        const mapped = data.map((item: any) => {
+          const brandVal = item.brand || item.merk || item.merek || '';
+          const rawName = item.nama_barang || item.goods_name || '';
+          const combinedGoodsName = formatLcdProductName(brandVal, rawName);
+
+          return {
+            id: item.id,
+            customer_code: item.kode_customer || item.customer_code || item.id_toko || '',
+            customer_name: item.nama_customer || item.customer_name || item.nama_toko || '',
+            goods_code: item.kode_barang || item.goods_code || item.type || '',
+            goods_name: combinedGoodsName,
+            raw_goods_name: rawName,
+            no_so: item.no_so || '',
+            tgl_so: item.tgl_so || item.date || item.tanggal || null,
+            no_sd: item.no_sd || item.no_surat_jalan || '',
+            brand: brandVal,
+            category: 'LCD',
+            date: item.tgl_so || item.date || item.tanggal || ''
+          };
+        });
         allData = [...allData, ...mapped];
 
         if (data.length < 1000) {
@@ -214,25 +243,32 @@ export async function searchLcdDatabase(params: {
       query = query.ilike('no_sd', `%${sdTerm}%`);
     }
     if (keyTerm) {
-      query = query.or(`nama_customer.ilike.%${keyTerm}%,kode_customer.ilike.%${keyTerm}%,nama_barang.ilike.%${keyTerm}%,kode_barang.ilike.%${keyTerm}%,no_so.ilike.%${keyTerm}%,no_sd.ilike.%${keyTerm}%`);
+      query = query.or(`brand.ilike.%${keyTerm}%,nama_customer.ilike.%${keyTerm}%,kode_customer.ilike.%${keyTerm}%,nama_barang.ilike.%${keyTerm}%,kode_barang.ilike.%${keyTerm}%,no_so.ilike.%${keyTerm}%,no_sd.ilike.%${keyTerm}%`);
     }
 
     const { data, error } = await query.order('created_at', { ascending: false }).limit(50);
 
     if (!error && data && data.length > 0) {
-      return data.map((item: any) => ({
-        id: item.id,
-        customer_code: item.kode_customer || item.customer_code || item.id_toko || '',
-        customer_name: item.nama_customer || item.customer_name || item.nama_toko || '',
-        goods_code: item.kode_barang || item.goods_code || item.type || '',
-        goods_name: item.nama_barang || item.goods_name || '',
-        no_so: item.no_so || '',
-        tgl_so: item.tgl_so || item.date || item.tanggal || null,
-        no_sd: item.no_sd || item.no_surat_jalan || '',
-        brand: item.brand || item.merk || 'LCD',
-        category: 'LCD',
-        date: item.tgl_so || item.date || item.tanggal || ''
-      }));
+      return data.map((item: any) => {
+        const brandVal = item.brand || item.merk || item.merek || '';
+        const rawName = item.nama_barang || item.goods_name || '';
+        const combinedGoodsName = formatLcdProductName(brandVal, rawName);
+
+        return {
+          id: item.id,
+          customer_code: item.kode_customer || item.customer_code || item.id_toko || '',
+          customer_name: item.nama_customer || item.customer_name || item.nama_toko || '',
+          goods_code: item.kode_barang || item.goods_code || item.type || '',
+          goods_name: combinedGoodsName,
+          raw_goods_name: rawName,
+          no_so: item.no_so || '',
+          tgl_so: item.tgl_so || item.date || item.tanggal || null,
+          no_sd: item.no_sd || item.no_surat_jalan || '',
+          brand: brandVal,
+          category: 'LCD',
+          date: item.tgl_so || item.date || item.tanggal || ''
+        };
+      });
     }
   } catch (err) {
     console.warn('Could not query database_lcd table directly:', err);
@@ -242,9 +278,11 @@ export async function searchLcdDatabase(params: {
     const matchSO = !soTerm || item.no_so.toLowerCase().includes(soTerm);
     const matchSD = !sdTerm || item.no_sd.toLowerCase().includes(sdTerm);
     const matchKey = !keyTerm || 
+      (item.brand && item.brand.toLowerCase().includes(keyTerm)) ||
       item.customer_name.toLowerCase().includes(keyTerm) ||
       item.customer_code.toLowerCase().includes(keyTerm) ||
       item.goods_name.toLowerCase().includes(keyTerm) ||
+      (item.raw_goods_name && item.raw_goods_name.toLowerCase().includes(keyTerm)) ||
       item.goods_code.toLowerCase().includes(keyTerm) ||
       item.no_so.toLowerCase().includes(keyTerm) ||
       item.no_sd.toLowerCase().includes(keyTerm);

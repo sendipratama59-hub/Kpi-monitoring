@@ -1,5 +1,6 @@
 export interface DatabaseLcdItem {
   id?: string;
+  brand?: string;
   kode_barang: string;
   nama_barang: string;
   kode_customer: string;

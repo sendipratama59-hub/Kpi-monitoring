@@ -108,6 +108,7 @@ export function DatabaseLcdUpload({ onUploadSuccess, onClose }: DatabaseLcdUploa
       };
 
       const mapped: DatabaseLcdItem[] = rawJson.map(row => {
+        const brand = findVal(row, ['brand', 'merk', 'merek', 'brand_hp', 'brand hp', 'vendor', 'manufaktur']);
         const kode_barang = findVal(row, ['kode_barang', 'kode barang', 'kode_produk', 'type', 'item_code', 'goods_code', 'kode']);
         const nama_barang = findVal(row, ['nama_barang', 'nama barang', 'nama_produk', 'item_name', 'goods_name', 'deskripsi', 'nama']);
         const kode_customer = findVal(row, ['kode_customer', 'kode customer', 'id_toko', 'id toko', 'customer_code', 'cust_code', 'kode_toko', 'kd_cust']);
@@ -117,6 +118,7 @@ export function DatabaseLcdUpload({ onUploadSuccess, onClose }: DatabaseLcdUploa
         const no_sd = findVal(row, ['no_sd', 'no sd', 'sd_number', 'sd_no', 'no_surat_jalan', 'surat_jalan', 'delivery_order', 'no do', 'nosd']);
 
         return {
+          brand,
           kode_barang,
           nama_barang,
           kode_customer,
@@ -125,7 +127,7 @@ export function DatabaseLcdUpload({ onUploadSuccess, onClose }: DatabaseLcdUploa
           tgl_so: parseExcelDate(raw_tgl_so),
           no_sd
         };
-      }).filter(r => r.kode_barang || r.nama_barang || r.no_so || r.no_sd);
+      }).filter(r => r.brand || r.kode_barang || r.nama_barang || r.no_so || r.no_sd);
 
       if (mapped.length === 0) {
         throw new Error('Tidak ada baris data valid yang berhasil dibaca. Pastikan nama kolom sesuai format.');
@@ -153,8 +155,9 @@ export function DatabaseLcdUpload({ onUploadSuccess, onClose }: DatabaseLcdUploa
   const handleDownloadTemplate = () => {
     const templateData = [
       {
-        kode_barang: 'LC-SAM-A50',
-        nama_barang: 'LCD SAMSUNG A50 / A50S / A30S OLED HITAM',
+        brand: 'iPhone',
+        kode_barang: 'LC-IPH-11',
+        nama_barang: '11 HD+',
         kode_customer: 'CUST-001',
         nama_customer: 'BERKAH CELL BANDUNG',
         no_so: 'SO-2026-0412',
@@ -162,13 +165,24 @@ export function DatabaseLcdUpload({ onUploadSuccess, onClose }: DatabaseLcdUploa
         no_sd: 'SD-2026-0889'
       },
       {
-        kode_barang: 'LC-OPP-A5S',
-        nama_barang: 'LCD OPPO A5S / A7 / A12 / REALME 3 OG CROWN',
+        brand: 'Samsung',
+        kode_barang: 'LC-SAM-A50',
+        nama_barang: 'A50 / A50S / A30S OLED HITAM',
         kode_customer: 'CUST-002',
         nama_customer: 'CENTRAL PHONE ITC',
         no_so: 'SO-2026-0415',
         tgl_so: '2026-04-15',
         no_sd: 'SD-2026-0895'
+      },
+      {
+        brand: 'Oppo',
+        kode_barang: 'LC-OPP-A5S',
+        nama_barang: 'A5S / A7 / A12 / REALME 3 OG CROWN',
+        kode_customer: 'CUST-003',
+        nama_customer: 'GLOBAL FLASH CELL',
+        no_so: 'SO-2026-0418',
+        tgl_so: '2026-04-18',
+        no_sd: 'SD-2026-0902'
       }
     ];
 
@@ -234,7 +248,7 @@ export function DatabaseLcdUpload({ onUploadSuccess, onClose }: DatabaseLcdUploa
             Upload File Excel Database LCD
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Format kolom yang didukung: <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">kode_barang</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">nama_barang</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">kode_customer</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">nama_customer</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">no_so</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">tgl_so</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">no_sd</code>
+            Format kolom yang didukung: <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">brand</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">kode_barang</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">nama_barang</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">kode_customer</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">nama_customer</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">no_so</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">tgl_so</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600">no_sd</code>
           </p>
         </div>
 
@@ -390,6 +404,7 @@ export function DatabaseLcdUpload({ onUploadSuccess, onClose }: DatabaseLcdUploa
                   <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                     <tr>
                       <th className="px-3 py-2 font-bold whitespace-nowrap">No</th>
+                      <th className="px-3 py-2 font-bold whitespace-nowrap">brand</th>
                       <th className="px-3 py-2 font-bold whitespace-nowrap">kode_barang</th>
                       <th className="px-3 py-2 font-bold whitespace-nowrap">nama_barang</th>
                       <th className="px-3 py-2 font-bold whitespace-nowrap">kode_customer</th>
@@ -403,6 +418,7 @@ export function DatabaseLcdUpload({ onUploadSuccess, onClose }: DatabaseLcdUploa
                     {parsedRows.slice(0, 5).map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-3 py-2 text-slate-400 font-medium">{idx + 1}</td>
+                        <td className="px-3 py-2 font-bold text-slate-700 whitespace-nowrap">{row.brand || '-'}</td>
                         <td className="px-3 py-2 font-mono font-bold text-indigo-600 whitespace-nowrap">{row.kode_barang || '-'}</td>
                         <td className="px-3 py-2 font-medium text-slate-800">{row.nama_barang || '-'}</td>
                         <td className="px-3 py-2 font-mono text-slate-600 whitespace-nowrap">{row.kode_customer || '-'}</td>

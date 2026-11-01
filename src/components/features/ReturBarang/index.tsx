@@ -292,6 +292,8 @@ export function ReturBarang({ isShared }: ReturBarangProps) {
         return_date: formData.return_date,
         goods_code: formData.goods_code,
         goods_name: formData.goods_name,
+        nama_barang: formData.nama_barang || formData.goods_name,
+        brand: formData.brand || null,
         category: formData.retur_type === 'lcd' ? (formData.category || 'LCD') : formData.category,
         qty: formData.qty,
         description: formData.description,

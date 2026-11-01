@@ -234,6 +234,8 @@ ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS salesman_code TEXT;
 ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS retur_type TEXT DEFAULT 'all';
 ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS no_so TEXT;
 ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS no_sd TEXT;
+ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS nama_barang TEXT;
+ALTER TABLE IF EXISTS retur_barang ADD COLUMN IF NOT EXISTS brand TEXT;
 
 DROP POLICY IF EXISTS "Allow all operations for retur_barang" ON retur_barang;
 CREATE POLICY "Allow all operations for retur_barang" ON retur_barang FOR ALL USING (true) WITH CHECK (true);
@@ -242,6 +244,7 @@ ALTER TABLE retur_barang ENABLE ROW LEVEL SECURITY;
 -- 22b. Database LCD
 CREATE TABLE IF NOT EXISTS database_lcd (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  brand TEXT,
   kode_barang TEXT,
   nama_barang TEXT,
   kode_customer TEXT,
@@ -253,6 +256,7 @@ CREATE TABLE IF NOT EXISTS database_lcd (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS brand TEXT;
 ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS kode_barang TEXT;
 ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS nama_barang TEXT;
 ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS kode_customer TEXT;
@@ -261,6 +265,7 @@ ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS no_so TEXT;
 ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS tgl_so DATE;
 ALTER TABLE IF EXISTS database_lcd ADD COLUMN IF NOT EXISTS no_sd TEXT;
 
+CREATE INDEX IF NOT EXISTS idx_database_lcd_brand ON database_lcd(brand);
 CREATE INDEX IF NOT EXISTS idx_database_lcd_no_so ON database_lcd(no_so);
 CREATE INDEX IF NOT EXISTS idx_database_lcd_no_sd ON database_lcd(no_sd);
 CREATE INDEX IF NOT EXISTS idx_database_lcd_cust ON database_lcd(kode_customer);
@@ -1350,5 +1355,62 @@ BEGIN
 END;
 $$;
 
+-- 38. Master LCD Table
+CREATE TABLE IF NOT EXISTS master_lcd (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  kode_lcd TEXT,
+  brand_hp TEXT,
+  status_lcd TEXT,
+  oled_soft_oled TEXT,
+  iphone_new TEXT,
+  batrai_iphone TEXT,
+  nama_lcd TEXT,
+  model_lcd TEXT,
+  packing NUMERIC DEFAULT 0,
+  harga_box NUMERIC DEFAULT 0,
+  harga_pcs NUMERIC DEFAULT 0,
+  stock NUMERIC DEFAULT 0,
+  brand_ TEXT,
+  brand_lcd TEXT,
+  raw_data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
+-- Migrasi aman untuk kolom master_lcd jika tabel sudah ada sebelumnya
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS kode_lcd TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS brand_hp TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS status_lcd TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS oled_soft_oled TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS iphone_new TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS batrai_iphone TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS nama_lcd TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS model_lcd TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS packing NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS harga_box NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS harga_pcs NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS stock NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS brand_ TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS brand_lcd TEXT;
+ALTER TABLE IF EXISTS master_lcd ADD COLUMN IF NOT EXISTS raw_data JSONB;
+
+-- Indeks untuk master_lcd
+CREATE INDEX IF NOT EXISTS idx_master_lcd_brand_ ON master_lcd(brand_);
+CREATE INDEX IF NOT EXISTS idx_master_lcd_kode_lcd ON master_lcd(kode_lcd);
+CREATE INDEX IF NOT EXISTS idx_master_lcd_brand_hp ON master_lcd(brand_hp);
+
+-- RLS untuk master_lcd
+ALTER TABLE master_lcd ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'master_lcd' AND policyname = 'Allow all operations for master_lcd'
+  ) THEN
+    CREATE POLICY "Allow all operations for master_lcd" ON master_lcd FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END $$;
+
+-- Pembersihan simbol tanda kurung fullwidth pada master_lcd
+UPDATE master_lcd SET model_lcd = REPLACE(REPLACE(REPLACE(model_lcd, '（', '('), '）', ')'), CHR(160), ' ') WHERE model_lcd LIKE '%（%' OR model_lcd LIKE '%）%' OR model_lcd LIKE '%' || CHR(160) || '%';
+UPDATE master_lcd SET nama_lcd = REPLACE(REPLACE(REPLACE(nama_lcd, '（', '('), '）', ')'), CHR(160), ' ') WHERE nama_lcd LIKE '%（%' OR nama_lcd LIKE '%）%' OR nama_lcd LIKE '%' || CHR(160) || '%';
 `;

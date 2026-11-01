@@ -36,6 +36,7 @@ export function Sidebar({ currentView, onChangeView }: SidebarProps) {
       label: 'Katalog LCD', 
       icon: LayoutDashboard,
       subItems: [
+        { id: 'master-lcd', label: 'Master LCD' },
         { id: 'catalog-lcd', label: 'Brosur LCD' },
         { id: 'admin-lcd', label: 'Admin Katalog LCD' },
         { id: 'lcd-compare', label: 'Perbandingan Harga' }
@@ -48,6 +49,7 @@ export function Sidebar({ currentView, onChangeView }: SidebarProps) {
       subItems: [
         { id: 'db-sales-customer', label: 'Database Sales & Customer' },
         { id: 'db-barang', label: 'Database Barang' },
+        { id: 'master-lcd', label: 'Master LCD' },
         { id: 'db-lcd', label: 'Database LCD' },
         { id: 'db-idle-customer', label: 'Idle Customer' }
       ]

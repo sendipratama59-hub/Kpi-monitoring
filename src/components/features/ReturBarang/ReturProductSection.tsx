@@ -3,13 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../ui/Card';
 import { Button } from '../../ui/Button';
 import { Search, Package, Plus, Hash, X, Calendar, FileText, CheckCircle2, ChevronDown } from 'lucide-react';
 import { cn } from '../../../utils/cn';
-import { LcdReturItem, formatMonthYearId } from '../../../services/lcdReturService';
+import { LcdReturItem, formatMonthYearId, formatLcdProductName } from '../../../services/lcdReturService';
 import { Customer } from './ReturCustomerSection';
 
 export interface Product {
   goods_code: string;
   goods_name: string;
   category?: string;
+  brand?: string;
+  nama_barang?: string;
 }
 
 interface ReturProductSectionProps {
@@ -71,7 +73,7 @@ export function ReturProductSection({
       return products;
     }
 
-    // In LCD Mode: Load from database_lcd
+    // In LCD Mode: Load from database_lcd with Brand + Nama Barang combined
     if (selectedCustomer) {
       // Step 1: Filter database_lcd rows for this customer
       const custCode = (selectedCustomer.customer_code || '').trim().toLowerCase();
@@ -87,12 +89,15 @@ export function ReturProductSection({
         // Extract distinct products for this customer
         const prodMap = new Map<string, Product>();
         matchedCustRows.forEach(r => {
-          const key = (r.goods_name || '').trim().toLowerCase();
+          const combinedName = formatLcdProductName(r.brand, r.goods_name);
+          const key = (combinedName || '').trim().toLowerCase();
           if (key && !prodMap.has(key)) {
             prodMap.set(key, {
               goods_code: r.goods_code || '',
-              goods_name: r.goods_name,
-              category: 'LCD'
+              goods_name: combinedName,
+              category: 'LCD',
+              brand: r.brand || '',
+              nama_barang: r.raw_goods_name || r.goods_name || ''
             });
           }
         });
@@ -103,12 +108,15 @@ export function ReturProductSection({
     // If no customer selected yet, or customer has no prior rows, load all distinct products from database_lcd
     const allLcdProdMap = new Map<string, Product>();
     lcdRecords.forEach(r => {
-      const key = (r.goods_name || '').trim().toLowerCase();
+      const combinedName = formatLcdProductName(r.brand, r.goods_name);
+      const key = (combinedName || '').trim().toLowerCase();
       if (key && !allLcdProdMap.has(key)) {
         allLcdProdMap.set(key, {
           goods_code: r.goods_code || '',
-          goods_name: r.goods_name,
-          category: 'LCD'
+          goods_name: combinedName,
+          category: 'LCD',
+          brand: r.brand || '',
+          nama_barang: r.raw_goods_name || r.goods_name || ''
         });
       }
     });
@@ -116,14 +124,15 @@ export function ReturProductSection({
     return Array.from(allLcdProdMap.values());
   }, [isLcdMode, selectedCustomer, lcdRecords, products]);
 
-  // Filtered product suggestions for the search input
+  // Filtered product suggestions for the search input (supports searching by brand, goods_name, or goods_code)
   const filteredProducts = useMemo(() => {
     const q = prodSearch.trim().toLowerCase();
-    if (!q) return availableProducts.slice(0, 15);
+    if (!q) return availableProducts.slice(0, 20);
     return availableProducts.filter(p =>
       (p.goods_name || '').toLowerCase().includes(q) ||
-      (p.goods_code || '').toLowerCase().includes(q)
-    ).slice(0, 15);
+      (p.goods_code || '').toLowerCase().includes(q) ||
+      (p.brand && p.brand.toLowerCase().includes(q))
+    ).slice(0, 20);
   }, [availableProducts, prodSearch]);
 
   // 2. Cascading SO & SD suggestions filtered by selected customer & selected product
@@ -146,8 +155,13 @@ export function ReturProductSection({
       if (!matchesCust) return false;
 
       const rProdName = (r.goods_name || '').trim().toLowerCase();
+      const rCombinedName = formatLcdProductName(r.brand, r.goods_name).toLowerCase();
+      const rRawName = (r.raw_goods_name || '').trim().toLowerCase();
       const rProdCode = (r.goods_code || '').trim().toLowerCase();
-      const matchesProd = (prodName && rProdName === prodName) || (prodCode && rProdCode === prodCode);
+
+      const matchesProd = 
+        (prodName && (rCombinedName === prodName || rProdName === prodName || (rRawName && rRawName === prodName))) ||
+        (prodCode && rProdCode === prodCode);
 
       return matchesProd;
     });
@@ -231,6 +245,11 @@ export function ReturProductSection({
                     <span className="text-[10px] font-mono font-black text-rose-600 bg-white px-2 py-0.5 rounded border border-rose-200">
                       TYPE: {selectedProduct.goods_code || '-'}
                     </span>
+                    {selectedProduct.brand && (
+                      <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                        {selectedProduct.brand}
+                      </span>
+                    )}
                     {selectedProduct.category && (
                       <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                         {selectedProduct.category}
@@ -306,7 +325,14 @@ export function ReturProductSection({
                         }}
                         className="w-full px-4 py-2 hover:bg-rose-50/60 text-left flex flex-col transition-colors cursor-pointer border-b border-slate-50 last:border-0"
                       >
-                        <span className="text-sm font-bold text-slate-700">{p.goods_name}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-bold text-slate-700">{p.goods_name}</span>
+                          {p.brand && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 uppercase shrink-0">
+                              {p.brand}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[10px] font-mono text-slate-400 font-semibold">{p.goods_code}</span>
                           {p.category && (

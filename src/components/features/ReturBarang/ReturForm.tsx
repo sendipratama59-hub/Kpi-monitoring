@@ -115,6 +115,8 @@ export function ReturForm({ customers, products, categories, onSubmit, loading }
 
     let finalGoodsCode = '';
     let finalGoodsName = '';
+    let finalNamaBarang = '';
+    let finalBrand = '';
     let finalCategory = '';
 
     if (isManualProduct) {
@@ -124,6 +126,7 @@ export function ReturForm({ customers, products, categories, onSubmit, loading }
       }
       finalGoodsCode = manualGoodsCode;
       finalGoodsName = manualGoodsName;
+      finalNamaBarang = manualGoodsName;
       finalCategory = manualCategory;
     } else {
       if (!selectedProduct) {
@@ -132,6 +135,8 @@ export function ReturForm({ customers, products, categories, onSubmit, loading }
       }
       finalGoodsCode = selectedProduct.goods_code;
       finalGoodsName = selectedProduct.goods_name;
+      finalNamaBarang = selectedProduct.nama_barang || selectedProduct.goods_name;
+      finalBrand = selectedProduct.brand || '';
       finalCategory = selectedProduct.category || '';
     }
 
@@ -141,6 +146,8 @@ export function ReturForm({ customers, products, categories, onSubmit, loading }
       return_date: returnDate,
       goods_code: finalGoodsCode,
       goods_name: finalGoodsName,
+      nama_barang: finalNamaBarang,
+      brand: finalBrand,
       qty,
       description,
       isManual: isManualProduct,

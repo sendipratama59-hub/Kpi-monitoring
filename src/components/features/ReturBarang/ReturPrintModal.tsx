@@ -12,12 +12,26 @@ export interface ReturRecordForPrint {
   return_date: string;
   goods_code: string;
   goods_name: string;
+  nama_barang?: string;
+  brand?: string;
   qty: number;
   description?: string;
   category?: string;
   retur_type?: string;
   no_so?: string;
   no_sd?: string;
+}
+
+export function getShortNamaBarang(record: ReturRecordForPrint): string {
+  let raw = (record.nama_barang || '').trim();
+  if (!raw && record.goods_name) {
+    raw = record.goods_name.trim();
+    if (record.brand && raw.toLowerCase().startsWith(record.brand.toLowerCase())) {
+      raw = raw.slice(record.brand.length).trim();
+    }
+  }
+  raw = raw.replace(/^[-–—:\s]+/, '').trim();
+  return raw.length > 10 ? raw.slice(0, 10).trim() : raw;
 }
 
 interface ReturPrintModalProps {
@@ -33,6 +47,10 @@ export function ReturPrintModal({ isOpen, onClose, records }: ReturPrintModalPro
   if (!isOpen || records.length === 0) return null;
 
   const sampleRecord = records[0];
+  const sampleShortName = getShortNamaBarang(sampleRecord);
+  const sampleTypeDisplay = sampleShortName && sampleRecord.goods_code 
+    ? `${sampleRecord.goods_code} - ${sampleShortName}` 
+    : (sampleRecord.goods_code || '-');
 
   const handleExecutePrint = () => {
     if (selectedDesign === 'bandung') {
@@ -111,31 +129,31 @@ export function ReturPrintModal({ isOpen, onClose, records }: ReturPrintModalPro
                     </div>
                     <div className="grid grid-cols-10 border-b border-black">
                       <div className="col-span-3 border-r border-black font-bold p-1 bg-slate-50/50 whitespace-nowrap text-[7.5px] uppercase">NAMA TOKO</div>
-                      <div className="col-span-7 p-1 font-bold truncate text-[8px] tracking-tight" title={`${sampleRecord.customer_name} (${sampleRecord.customer_code || '-'})`}>
-                        {sampleRecord.customer_name} {sampleRecord.customer_code && <span className="font-normal text-slate-500 text-[7px]">({sampleRecord.customer_code})</span>}
+                      <div className="col-span-7 p-1 font-bold truncate text-[8.5px]" title={`${sampleRecord.customer_name} (${sampleRecord.customer_code || '-'})`}>
+                        {sampleRecord.customer_name} {sampleRecord.customer_code && <span className="font-semibold text-slate-500 text-[7.5px]">({sampleRecord.customer_code})</span>}
                       </div>
                     </div>
                     <div className="grid grid-cols-10 border-b border-black">
                       <div className="col-span-3 border-r border-black font-bold p-1 bg-slate-50/50 whitespace-nowrap text-[7.5px] uppercase">NO SO</div>
-                      <div className="col-span-7 p-1 font-mono font-bold text-[8px] truncate">
+                      <div className="col-span-7 p-1 font-mono font-bold text-[8.5px] truncate">
                         {sampleRecord.no_so || '-'}
                       </div>
                     </div>
                     <div className="grid grid-cols-10 border-b border-black">
                       <div className="col-span-3 border-r border-black font-bold p-1 bg-slate-50/50 whitespace-nowrap text-[7.5px] uppercase">NO SD (LCD/Bt)</div>
-                      <div className="col-span-7 p-1 font-mono font-bold text-[8px] truncate">
+                      <div className="col-span-7 p-1 font-mono font-bold text-[8.5px] truncate">
                         {sampleRecord.no_sd || '-'}
                       </div>
                     </div>
                     <div className="grid grid-cols-10 border-b border-black">
                       <div className="col-span-3 border-r border-black font-bold p-1 bg-slate-50/50 whitespace-nowrap text-[7.5px] uppercase">TYPE</div>
-                      <div className="col-span-7 p-1 font-black text-indigo-700 font-mono text-[8px] truncate">
-                        {sampleRecord.goods_code || '-'}
+                      <div className="col-span-7 p-1 font-black text-indigo-700 font-mono text-[8.5px] truncate" title={sampleTypeDisplay}>
+                        {sampleTypeDisplay}
                       </div>
                     </div>
                     <div className="grid grid-cols-10">
                       <div className="col-span-3 border-r border-black font-bold p-1 bg-slate-50/50 whitespace-nowrap text-[7.5px] uppercase">KERUSAKAN</div>
-                      <div className="col-span-7 p-1 font-bold text-slate-800 text-[8px] tracking-tight truncate" title={sampleRecord.description || '-'}>
+                      <div className="col-span-7 p-1 font-bold text-slate-800 text-[8.5px] truncate" title={sampleRecord.description || '-'}>
                         {sampleRecord.description || '-'}
                       </div>
                     </div>

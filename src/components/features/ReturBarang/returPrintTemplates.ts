@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { ReturRecordForPrint } from './ReturPrintModal';
+import { ReturRecordForPrint, getShortNamaBarang } from './ReturPrintModal';
 
 function escapeHtml(str?: string | number | null): string {
   if (str === undefined || str === null) return '';
@@ -42,69 +42,73 @@ export function printBandung(records: ReturRecordForPrint[], copiesPerItem: numb
       const rawStoreCode = record.customer_code ? `(${record.customer_code})` : '';
       const fullStoreLength = (rawStoreName + (rawStoreCode ? ' ' + rawStoreCode : '')).trim().length;
 
-      // Dynamic auto-scale font size based on text length to guarantee 0 truncation
-      let storeStyle = 'font-size: 6.6pt;';
-      if (fullStoreLength > 36) {
-        storeStyle = 'font-size: 4.8pt; letter-spacing: -0.25px;';
-      } else if (fullStoreLength > 28) {
-        storeStyle = 'font-size: 5.2pt; letter-spacing: -0.2px;';
-      } else if (fullStoreLength > 20) {
-        storeStyle = 'font-size: 5.6pt; letter-spacing: -0.15px;';
-      } else if (fullStoreLength > 15) {
-        storeStyle = 'font-size: 6.0pt; letter-spacing: -0.1px;';
+      // Harmonized default font size (7.2pt matching TYPE) with natural, comfortable spacing
+      let storeStyle = 'font-size: 7.2pt;';
+      if (fullStoreLength > 38) {
+        storeStyle = 'font-size: 5.8pt;';
+      } else if (fullStoreLength > 30) {
+        storeStyle = 'font-size: 6.4pt;';
       }
 
       // Dynamic auto-scale for kerusakan if long
       const rawKerusakan = record.description || '-';
-      let damageStyle = 'font-size: 6.6pt;';
-      if (rawKerusakan.length > 36) {
-        damageStyle = 'font-size: 5.0pt; letter-spacing: -0.25px;';
-      } else if (rawKerusakan.length > 25) {
-        damageStyle = 'font-size: 5.6pt; letter-spacing: -0.15px;';
-      } else if (rawKerusakan.length > 18) {
-        damageStyle = 'font-size: 6.0pt; letter-spacing: -0.1px;';
+      let damageStyle = 'font-size: 7.2pt;';
+      if (rawKerusakan.length > 38) {
+        damageStyle = 'font-size: 5.8pt;';
+      } else if (rawKerusakan.length > 30) {
+        damageStyle = 'font-size: 6.4pt;';
       }
 
       const storeName = escapeHtml(rawStoreName);
       const storeCode = record.customer_code ? `<span class="id-toko">(${escapeHtml(record.customer_code)})</span>` : '';
       const noSo = escapeHtml(record.no_so || '-');
       const noSd = escapeHtml(record.no_sd || '-');
-      const goodsCode = escapeHtml(record.goods_code || '-');
+      const rawGoodsCode = record.goods_code || '-';
+      const goodsCode = escapeHtml(rawGoodsCode);
       const kerusakan = escapeHtml(rawKerusakan);
+
+      // Extract short nama_barang without brand (max 10 chars) per user request: [Kode] - [Nama Barang 10 char]
+      const shortItemName = getShortNamaBarang(record);
+      const typeDisplay = shortItemName && rawGoodsCode !== '-'
+        ? `${goodsCode} - ${escapeHtml(shortItemName)}`
+        : goodsCode;
+
+      // Dynamic auto-scale for TYPE row
+      let typeStyle = 'font-size: 7.2pt;';
+      const typeLength = (rawGoodsCode + (shortItemName ? ' - ' + shortItemName : '')).length;
+      if (typeLength > 24) {
+        typeStyle = 'font-size: 6.2pt;';
+      } else if (typeLength > 19) {
+        typeStyle = 'font-size: 6.7pt;';
+      }
 
       return `
         <div class="bandung-card">
-          <table class="bandung-table">
-            <thead>
-              <tr>
-                <th colspan="2" class="th-header">BANDUNG</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="td-label">NAMA TOKO</td>
-                <td class="td-value font-store" style="${storeStyle}" title="${storeName} ${rawStoreCode}">
-                  <span class="store-text">${storeName}</span> ${storeCode}
-                </td>
-              </tr>
-              <tr>
-                <td class="td-label">NO SO</td>
-                <td class="td-value font-code-sm" title="${noSo}">${noSo}</td>
-              </tr>
-              <tr>
-                <td class="td-label">NO SD (LCD/Bt)</td>
-                <td class="td-value font-code-sm" title="${noSd}">${noSd}</td>
-              </tr>
-              <tr>
-                <td class="td-label">TYPE</td>
-                <td class="td-value font-code" title="${goodsCode}">${goodsCode}</td>
-              </tr>
-              <tr>
-                <td class="td-label">KERUSAKAN</td>
-                <td class="td-value font-damage" style="${damageStyle}" title="${kerusakan}">${kerusakan}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="bandung-box">
+            <div class="th-header">BANDUNG</div>
+            <div class="bandung-row">
+              <div class="td-label">NAMA TOKO</div>
+              <div class="td-value font-store" style="${storeStyle}" title="${storeName} ${rawStoreCode}">
+                <span class="store-text">${storeName}</span> ${storeCode}
+              </div>
+            </div>
+            <div class="bandung-row">
+              <div class="td-label">NO SO</div>
+              <div class="td-value font-code-sm" title="${noSo}">${noSo}</div>
+            </div>
+            <div class="bandung-row">
+              <div class="td-label">NO SD (LCD/BT)</div>
+              <div class="td-value font-code-sm" title="${noSd}">${noSd}</div>
+            </div>
+            <div class="bandung-row">
+              <div class="td-label">TYPE</div>
+              <div class="td-value font-code" style="${typeStyle}" title="${escapeHtml(record.goods_code || '')} - ${escapeHtml(record.goods_name || '')}">${typeDisplay}</div>
+            </div>
+            <div class="bandung-row last-row">
+              <div class="td-label">KERUSAKAN</div>
+              <div class="td-value font-damage" style="${damageStyle}" title="${kerusakan}">${kerusakan}</div>
+            </div>
+          </div>
         </div>
       `;
     }).join('');
@@ -175,67 +179,92 @@ export function printBandung(records: ReturRecordForPrint[], copiesPerItem: numb
             box-sizing: border-box;
             overflow: hidden;
           }
-          .bandung-table {
+          .bandung-box {
             width: 100%;
             height: 100%;
-            border-collapse: collapse;
             border: 1.5px solid #000;
-            table-layout: fixed;
-          }
-          .bandung-table th, .bandung-table td {
-            border: 1px solid #000;
-            vertical-align: middle;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            word-break: keep-all !important;
-            overflow-wrap: normal !important;
+            display: flex;
+            flex-direction: column;
             box-sizing: border-box;
-            line-height: 1.15;
+            background: #fff;
+            overflow: hidden;
           }
           .th-header {
             text-align: center;
             font-size: 8.5pt;
             font-weight: 900;
             letter-spacing: 2px;
-            padding: 1px 3px;
             color: #000;
             background-color: #f8fafc;
+            border-bottom: 1.5px solid #000;
             height: 16%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            white-space: nowrap;
+          }
+          .bandung-row {
+            display: flex;
+            flex-direction: row;
+            height: 21%;
+            border-bottom: 1px solid #000;
+            box-sizing: border-box;
+            overflow: hidden;
+          }
+          .bandung-row.last-row {
+            border-bottom: none;
           }
           .td-label {
-            width: 24%;
-            max-width: 24%;
+            width: 30% !important;
+            min-width: 30% !important;
+            max-width: 30% !important;
+            border-right: 1.5px solid #000;
             font-weight: 800;
-            font-size: 5.8pt;
+            font-size: 6.5pt;
             text-transform: uppercase;
             color: #0f172a;
             background-color: #f8fafc;
-            letter-spacing: -0.2px;
-            padding: 1px 2px;
-            font-family: 'Roboto Condensed', 'Inter', sans-serif;
+            letter-spacing: 0;
+            padding: 0 4px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            overflow: hidden;
+            box-sizing: border-box;
           }
           .td-value {
-            width: 76%;
-            max-width: 76%;
-            font-size: 6.6pt;
+            width: 70% !important;
+            min-width: 70% !important;
+            max-width: 70% !important;
+            font-size: 7.2pt;
             color: #000;
-            font-family: 'Roboto Condensed', 'Inter', 'Segoe UI', Arial, sans-serif;
-            font-stretch: condensed;
-            padding: 1px 3px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            letter-spacing: 0;
+            padding: 0 4px;
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            box-sizing: border-box;
           }
           .font-store {
-            font-weight: 800;
+            font-weight: 700;
+            font-size: 7.2pt;
+            letter-spacing: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           }
           .store-text {
-            font-weight: 800;
+            font-weight: 700;
             color: #000;
           }
           .id-toko {
-            font-weight: 500;
-            font-size: 0.88em;
-            color: #475569;
-            margin-left: 2.5px;
+            font-weight: 600;
+            font-size: 6.8pt;
+            color: #334155;
+            margin-left: 3px;
           }
           .font-code {
             font-weight: 900;
@@ -246,16 +275,18 @@ export function printBandung(records: ReturRecordForPrint[], copiesPerItem: numb
           }
           .font-code-sm {
             font-weight: 700;
-            font-size: 6.6pt;
+            font-size: 7.2pt;
             letter-spacing: 0.1px;
             color: #000;
             font-family: 'JetBrains Mono', monospace;
           }
           .font-damage {
-            font-weight: 800;
-            font-size: 6.6pt;
+            font-weight: 700;
+            font-size: 7.2pt;
             color: #0f172a;
             text-transform: uppercase;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            letter-spacing: 0;
           }
           @media print {
             .no-print { display: none !important; }

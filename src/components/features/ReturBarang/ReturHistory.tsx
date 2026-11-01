@@ -1,8 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/Card';
 import { Button } from '../../ui/Button';
 import { supabase } from '../../../services/supabase';
-import { Search, Loader2, Calendar, Filter, Download, Trash2, Printer, Edit2, CheckCircle, RefreshCw, X, FileText, Check, Copy } from 'lucide-react';
+import { 
+  Search, 
+  Loader2, 
+  Calendar, 
+  Filter, 
+  Download, 
+  Trash2, 
+  Printer, 
+  Edit2, 
+  CheckCircle, 
+  RefreshCw, 
+  X, 
+  FileText, 
+  Check, 
+  Copy,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
+} from 'lucide-react';
 import { cn } from '../../../utils/cn';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -20,6 +39,8 @@ interface ReturRecord {
   category?: string;
   goods_code: string;
   goods_name: string;
+  nama_barang?: string;
+  brand?: string;
   qty: number;
   finished_qty: number;
   status: 'Pending' | 'Partial' | 'Completed';
@@ -50,6 +71,10 @@ export function ReturHistory({ categories, isShared, salesmanCode }: ReturHistor
   const [statusFilter, setStatusFilter] = useState('All');
   const [returTypeFilter, setReturTypeFilter] = useState('All');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Pagination State - Maksimal 50 baris per halaman sesuai permintaan
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
   
   const [processingRecord, setProcessingRecord] = useState<ReturRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<ReturRecord | null>(null);
@@ -71,18 +96,38 @@ export function ReturHistory({ categories, isShared, salesmanCode }: ReturHistor
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('retur_barang')
-        .select('*');
+      let allRecords: ReturRecord[] = [];
+      let from = 0;
+      const chunkSize = 1000;
+      let hasMore = true;
 
-      if (isShared && salesmanCode) {
-        query = query.eq('salesman_code', salesmanCode);
+      while (hasMore) {
+        let query = supabase
+          .from('retur_barang')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + chunkSize - 1);
+
+        if (isShared && salesmanCode) {
+          query = query.eq('salesman_code', salesmanCode);
+        }
+
+        const { data: res, error } = await query;
+        if (error) throw error;
+
+        if (res && res.length > 0) {
+          allRecords = [...allRecords, ...res];
+          if (res.length < chunkSize) {
+            hasMore = false;
+          } else {
+            from += chunkSize;
+          }
+        } else {
+          hasMore = false;
+        }
       }
 
-      const { data: res, error } = await query.order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setData(res || []);
+      setData(allRecords);
       setSelectedIds([]);
     } catch (err) {
       console.error(err);
@@ -184,12 +229,71 @@ export function ReturHistory({ categories, isShared, salesmanCode }: ReturHistor
     }
   };
 
-  const toggleSelectAll = () => {
-    if (selectedIds.length === filteredData.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filteredData.map(item => item.id));
+  const filteredData = useMemo(() => {
+    return data.filter(item => {
+      const matchesSearch = 
+        !searchTerm.trim() ||
+        item.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.customer_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.goods_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.goods_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.no_so?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.no_sd?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus = statusFilter === 'All' || item.status === statusFilter;
+      
+      const matchesReturType = 
+        returTypeFilter === 'All' || 
+        (returTypeFilter === 'lcd' && item.retur_type === 'lcd') ||
+        (returTypeFilter === 'all' && item.retur_type !== 'lcd');
+
+      const matchesDate = (!dateStart || item.return_date >= dateStart) && 
+                         (!dateEnd || item.return_date <= dateEnd);
+
+      return matchesSearch && matchesStatus && matchesReturType && matchesDate;
+    });
+  }, [data, searchTerm, statusFilter, returTypeFilter, dateStart, dateEnd]);
+
+  // Reset to page 1 whenever search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, dateStart, dateEnd, statusFilter, returTypeFilter]);
+
+  // Pagination calculation (default 50 rows per user request)
+  const totalItems = filteredData.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
     }
+  }, [currentPage, totalPages]);
+
+  const paginatedData = useMemo(() => {
+    return filteredData.slice(startIndex, startIndex + pageSize);
+  }, [filteredData, startIndex, pageSize]);
+
+  // Checkbox Selection Helpers
+  const isAllCurrentPageSelected = paginatedData.length > 0 && paginatedData.every(item => selectedIds.includes(item.id));
+
+  const toggleSelectPage = () => {
+    if (isAllCurrentPageSelected) {
+      const pageIds = new Set(paginatedData.map(i => i.id));
+      setSelectedIds(prev => prev.filter(id => !pageIds.has(id)));
+    } else {
+      const newIds = new Set([...selectedIds, ...paginatedData.map(i => i.id)]);
+      setSelectedIds(Array.from(newIds));
+    }
+  };
+
+  const handleSelectAllFiltered = () => {
+    setSelectedIds(filteredData.map(item => item.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
   };
 
   const toggleSelect = (id: string) => {
@@ -265,27 +369,7 @@ Qty : ${record.qty}
     handleOpenPrintModal(records);
   };
 
-  const filteredData = data.filter(item => {
-    const matchesSearch = 
-      item.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.customer_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.goods_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.goods_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.no_so?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.no_sd?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesStatus = statusFilter === 'All' || item.status === statusFilter;
-    
-    const matchesReturType = 
-      returTypeFilter === 'All' || 
-      (returTypeFilter === 'lcd' && item.retur_type === 'lcd') ||
-      (returTypeFilter === 'all' && item.retur_type !== 'lcd');
-
-    const matchesDate = (!dateStart || item.return_date >= dateStart) && 
-                       (!dateEnd || item.return_date <= dateEnd);
-
-    return matchesSearch && matchesStatus && matchesReturType && matchesDate;
-  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -303,13 +387,31 @@ Qty : ${record.qty}
             <RefreshCw className={cn("w-5 h-5 mr-2 text-indigo-500", loading && "animate-spin")} />
             Riwayat Retur
           </h2>
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mt-1">Total: {filteredData.length} records</p>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mt-1">
+            Total: {totalItems} records · Halaman {currentPage} dari {totalPages} (Maks 50/hal)
+          </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           {selectedIds.length > 0 && (
-            <div className="flex items-center gap-2 pr-4 mr-4 border-r border-slate-200 animate-in fade-in slide-in-from-right-4">
+            <div className="flex items-center gap-2 pr-4 mr-2 border-r border-slate-200 animate-in fade-in slide-in-from-right-4 flex-wrap">
               <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{selectedIds.length} Terpilih</span>
+              {selectedIds.length < totalItems && (
+                <button
+                  type="button"
+                  onClick={handleSelectAllFiltered}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                >
+                  Pilih Semua ({totalItems})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                Batal
+              </button>
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -447,9 +549,10 @@ Qty : ${record.qty}
                   <th className="px-6 py-4 w-10">
                     <input 
                       type="checkbox" 
-                      checked={selectedIds.length === filteredData.length && filteredData.length > 0}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      checked={isAllCurrentPageSelected}
+                      onChange={toggleSelectPage}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      title={isAllCurrentPageSelected ? "Batalkan pilihan halaman ini" : "Pilih semua di halaman ini"}
                     />
                   </th>
                   <th className="px-6 py-4">Produk & Type</th>
@@ -466,8 +569,8 @@ Qty : ${record.qty}
                       <td colSpan={6} className="px-6 py-8 bg-slate-50/20"></td>
                     </tr>
                   ))
-                ) : filteredData.length > 0 ? (
-                  filteredData.map((record) => (
+                ) : paginatedData.length > 0 ? (
+                  paginatedData.map((record) => (
                     <tr key={record.id} className={cn("group hover:bg-slate-50/50 transition-colors", selectedIds.includes(record.id) && "bg-indigo-50/30")}>
                       <td className="px-6 py-4">
                         <input 
@@ -590,6 +693,84 @@ Qty : ${record.qty}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls Footer */}
+          {totalItems > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-slate-50/80 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-500 font-medium w-full sm:w-auto justify-between sm:justify-start">
+                <span>
+                  Menampilkan <strong className="text-slate-800 font-bold">{startIndex + 1}</strong> - <strong className="text-slate-800 font-bold">{endIndex}</strong> dari <strong className="text-slate-800 font-bold">{totalItems}</strong> data
+                </span>
+                <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-1 rounded-lg">
+                  <span className="text-slate-400 font-normal">Tampil:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-transparent font-bold text-slate-700 focus:outline-none cursor-pointer"
+                  >
+                    <option value={25}>25 baris</option>
+                    <option value={50}>50 baris (Maks)</option>
+                    <option value={100}>100 baris</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 self-center sm:self-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="h-8 w-8 p-0 rounded-lg border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-100"
+                  title="Halaman Pertama"
+                >
+                  <ChevronsLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="h-8 px-2.5 rounded-lg border-slate-200 text-slate-600 font-bold text-xs disabled:opacity-30 hover:bg-slate-100 flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Prev</span>
+                </Button>
+
+                <div className="flex items-center gap-1 px-2 text-xs font-bold text-slate-700">
+                  <span className="bg-white border border-indigo-200 text-indigo-700 px-2.5 py-1 rounded-lg font-black shadow-2xs">
+                    {currentPage}
+                  </span>
+                  <span className="text-slate-400 font-medium">/</span>
+                  <span className="text-slate-500 font-semibold">{totalPages}</span>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="h-8 px-2.5 rounded-lg border-slate-200 text-slate-600 font-bold text-xs disabled:opacity-30 hover:bg-slate-100 flex items-center gap-1"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="h-8 w-8 p-0 rounded-lg border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-100"
+                  title="Halaman Terakhir"
+                >
+                  <ChevronsRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -11,7 +11,8 @@ import {
   Store,
   Calendar,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Tag
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from '../../ui/Button';
@@ -42,6 +43,7 @@ export function DatabaseLcdTable({
     if (!searchTerm.trim()) return data;
     const term = searchTerm.toLowerCase().trim();
     return data.filter(item => 
+      (item.brand && item.brand.toLowerCase().includes(term)) ||
       (item.kode_barang && item.kode_barang.toLowerCase().includes(term)) ||
       (item.nama_barang && item.nama_barang.toLowerCase().includes(term)) ||
       (item.kode_customer && item.kode_customer.toLowerCase().includes(term)) ||
@@ -70,6 +72,7 @@ export function DatabaseLcdTable({
     if (filteredData.length === 0) return;
     const exportRows = filteredData.map((item, idx) => ({
       No: idx + 1,
+      Brand: item.brand || '',
       'Kode Barang': item.kode_barang || '',
       'Nama Barang': item.nama_barang || '',
       'Kode Customer': item.kode_customer || '',
@@ -104,7 +107,7 @@ export function DatabaseLcdTable({
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Cari No SO, No SD, Toko, atau Kode Barang..."
+            placeholder="Cari Brand, No SO, No SD, Toko, atau Kode Barang..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -176,6 +179,12 @@ export function DatabaseLcdTable({
               <th className="px-3 py-3 font-bold w-12 text-center text-slate-500">No</th>
               <th className="px-3 py-3 font-bold whitespace-nowrap">
                 <span className="flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5 text-cyan-600" />
+                  Brand
+                </span>
+              </th>
+              <th className="px-3 py-3 font-bold whitespace-nowrap">
+                <span className="flex items-center gap-1">
                   <Hash className="w-3.5 h-3.5 text-indigo-500" />
                   Kode Barang
                 </span>
@@ -217,7 +226,7 @@ export function DatabaseLcdTable({
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-16 text-center text-slate-500">
+                <td colSpan={10} className="px-4 py-16 text-center text-slate-500">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
                     <span className="text-xs font-semibold">Memuat data Database LCD...</span>
@@ -226,7 +235,7 @@ export function DatabaseLcdTable({
               </tr>
             ) : paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-16 text-center text-slate-400">
+                <td colSpan={10} className="px-4 py-16 text-center text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <AlertCircle className="w-8 h-8 text-slate-300" />
                     <span className="text-xs font-semibold text-slate-600">
@@ -245,6 +254,15 @@ export function DatabaseLcdTable({
                   <tr key={row.id || index} className="hover:bg-indigo-50/30 transition-colors">
                     <td className="px-3 py-2.5 text-center text-slate-400 font-mono text-[11px]">
                       {actualIndex}
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      {row.brand ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                          {row.brand}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 font-mono font-bold text-indigo-700 whitespace-nowrap">
                       {row.kode_barang || '-'}

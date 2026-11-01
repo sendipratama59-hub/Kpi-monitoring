@@ -1413,4 +1413,37 @@ END $$;
 -- Pembersihan simbol tanda kurung fullwidth pada master_lcd
 UPDATE master_lcd SET model_lcd = REPLACE(REPLACE(REPLACE(model_lcd, '（', '('), '）', ')'), CHR(160), ' ') WHERE model_lcd LIKE '%（%' OR model_lcd LIKE '%）%' OR model_lcd LIKE '%' || CHR(160) || '%';
 UPDATE master_lcd SET nama_lcd = REPLACE(REPLACE(REPLACE(nama_lcd, '（', '('), '）', ')'), CHR(160), ' ') WHERE nama_lcd LIKE '%（%' OR nama_lcd LIKE '%）%' OR nama_lcd LIKE '%' || CHR(160) || '%';
+
+-- 39. Master LCD Templates (Template Filter, Kolom, Diskon & Ekspor)
+CREATE TABLE IF NOT EXISTS master_lcd_templates (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  target_type TEXT DEFAULT 'all', -- 'all', 'pdf', 'excel', 'view'
+  config JSONB NOT NULL DEFAULT '{}'::jsonb,
+  is_default BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Migrasi kolom aman jika tabel sudah ada sebelumnya
+ALTER TABLE IF EXISTS master_lcd_templates ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE IF EXISTS master_lcd_templates ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE IF EXISTS master_lcd_templates ADD COLUMN IF NOT EXISTS target_type TEXT DEFAULT 'all';
+ALTER TABLE IF EXISTS master_lcd_templates ADD COLUMN IF NOT EXISTS config JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE IF EXISTS master_lcd_templates ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE;
+
+-- Indeks
+CREATE INDEX IF NOT EXISTS idx_master_lcd_templates_name ON master_lcd_templates(name);
+
+-- RLS untuk master_lcd_templates
+ALTER TABLE master_lcd_templates ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'master_lcd_templates' AND policyname = 'Allow all operations for master_lcd_templates'
+  ) THEN
+    CREATE POLICY "Allow all operations for master_lcd_templates" ON master_lcd_templates FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 `;

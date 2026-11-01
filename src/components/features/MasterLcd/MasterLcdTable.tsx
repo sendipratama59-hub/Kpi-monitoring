@@ -17,13 +17,28 @@ interface MasterLcdTableProps {
   visibleKeys: string[];
   isLoading: boolean;
   onFilteredItemsChange?: (filtered: MasterLcdItem[]) => void;
+  externalFilters?: {
+    selectedBrand?: string;
+    selectedBrandHp?: string;
+    searchTerm?: string;
+    columnFilters?: Record<string, string[]>;
+    key?: string | number;
+  };
+  onFilterStateChange?: (state: {
+    selectedBrand: string;
+    selectedBrandHp: string;
+    searchTerm: string;
+    columnFilters: Record<string, string[]>;
+  }) => void;
 }
 
 export function MasterLcdTable({
   items,
   visibleKeys,
   isLoading,
-  onFilteredItemsChange
+  onFilteredItemsChange,
+  externalFilters,
+  onFilterStateChange
 }: MasterLcdTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState<string>('ALL');
@@ -36,6 +51,35 @@ export function MasterLcdTable({
   // Column filters state: Record<columnKey, selectedValues[]>
   const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
   const [openFilterCol, setOpenFilterCol] = useState<string | null>(null);
+
+  // Apply external filters from template
+  useEffect(() => {
+    if (externalFilters) {
+      if (externalFilters.selectedBrand !== undefined) {
+        setSelectedBrand(externalFilters.selectedBrand);
+      }
+      if (externalFilters.selectedBrandHp !== undefined) {
+        setSelectedBrandHp(externalFilters.selectedBrandHp);
+      }
+      if (externalFilters.searchTerm !== undefined) {
+        setSearchTerm(externalFilters.searchTerm);
+      }
+      if (externalFilters.columnFilters !== undefined) {
+        setColumnFilters(externalFilters.columnFilters);
+      }
+      setCurrentPage(1);
+    }
+  }, [externalFilters]);
+
+  // Report filter state up to parent
+  useEffect(() => {
+    onFilterStateChange?.({
+      selectedBrand,
+      selectedBrandHp,
+      searchTerm,
+      columnFilters
+    });
+  }, [selectedBrand, selectedBrandHp, searchTerm, columnFilters, onFilterStateChange]);
 
   // Active columns in order
   const activeColumns: ColumnDefinition[] = useMemo(() => {
@@ -93,12 +137,26 @@ export function MasterLcdTable({
         for (const [colKey, allowedValues] of Object.entries(columnFilters)) {
           if (allowedValues && allowedValues.length > 0) {
             let val = (item as any)[colKey];
-            if (val === undefined || val === null || val === '') {
-              val = '(Kosong)';
-            } else {
-              val = String(val).trim();
+            val = (val === undefined || val === null || val === '') ? '(Kosong)' : String(val).trim();
+
+            let isAllowed = allowedValues.includes(val);
+
+            // If not directly matched, check original price for discounted items
+            if (!isAllowed) {
+              if (colKey === 'harga_box' && (item as any).original_harga_box !== undefined) {
+                const origVal = String((item as any).original_harga_box).trim();
+                if (origVal && allowedValues.includes(origVal)) {
+                  isAllowed = true;
+                }
+              } else if (colKey === 'harga_pcs' && (item as any).original_harga_pcs !== undefined) {
+                const origVal = String((item as any).original_harga_pcs).trim();
+                if (origVal && allowedValues.includes(origVal)) {
+                  isAllowed = true;
+                }
+              }
             }
-            if (!allowedValues.includes(val)) {
+
+            if (!isAllowed) {
               return false;
             }
           }

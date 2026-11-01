@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx-js-style';
 import { 
   Download, 
@@ -10,12 +10,14 @@ import {
   ArrowUpDown, 
   Palette, 
   Type,
-  Package
+  Package,
+  Bookmark
 } from 'lucide-react';
 import { MasterLcdItem, ColumnDefinition, DEFAULT_COLUMNS, DiscountRule } from './types';
 import { createStyledWorksheet, ExportSortConfig } from './styledExcelGenerator';
 import { ExportDiscountSelector } from './ExportDiscountSelector';
 import { applyDiscountsToItems } from './discountUtils';
+import { MasterLcdTemplate, fetchTemplates } from './templateService';
 
 interface MasterLcdExportModalProps {
   items: MasterLcdItem[];
@@ -24,6 +26,7 @@ interface MasterLcdExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   discountRules?: DiscountRule[];
+  initialTemplate?: MasterLcdTemplate | null;
 }
 
 export function MasterLcdExportModal({
@@ -32,7 +35,8 @@ export function MasterLcdExportModal({
   visibleKeys,
   isOpen,
   onClose,
-  discountRules = []
+  discountRules = [],
+  initialTemplate = null
 }: MasterLcdExportModalProps) {
   const [dataScope, setDataScope] = useState<'all' | 'filtered'>('all');
   const [includeVivan, setIncludeVivan] = useState(true);
@@ -49,9 +53,16 @@ export function MasterLcdExportModal({
   const [useGoldenStyle, setUseGoldenStyle] = useState<boolean>(true);
   const [customSheetTitle, setCustomSheetTitle] = useState<string>('');
 
+  // Template discount rules override props if template is selected
+  const [activeTemplateRules, setActiveTemplateRules] = useState<DiscountRule[] | null>(
+    initialTemplate?.config?.discountRules || null
+  );
+
+  const effectiveRules = activeTemplateRules || discountRules;
+
   // Discount Selection for XPAS & VIVAN sheets
-  const xpasRules = discountRules.filter(r => r.targetBrandLcd === 'XPAS');
-  const vivanRules = discountRules.filter(r => r.targetBrandLcd === 'VIVAN');
+  const xpasRules = effectiveRules.filter(r => r.targetBrandLcd === 'XPAS' || r.targetBrandLcd === 'ALL');
+  const vivanRules = effectiveRules.filter(r => r.targetBrandLcd === 'VIVAN' || r.targetBrandLcd === 'ALL');
 
   const [xpasDiscountChoice, setXpasDiscountChoice] = useState<string>(() => {
     if (xpasRules.length > 1) return 'ALL_TIERS';
@@ -69,6 +80,44 @@ export function MasterLcdExportModal({
 
   // Option to include stock in Excel export
   const [includeStock, setIncludeStock] = useState<boolean>(() => visibleKeys.includes('stock'));
+
+  // Template loader state
+  const [savedTemplates, setSavedTemplates] = useState<MasterLcdTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+
+  useEffect(() => {
+    fetchTemplates().then(list => {
+      setSavedTemplates(list.filter(t => t.target_type === 'all' || t.target_type === 'excel' || t.config?.excelConfig));
+    });
+  }, []);
+
+  const applyExcelTemplate = (tmpl: MasterLcdTemplate) => {
+    if (tmpl.config?.discountRules) {
+      setActiveTemplateRules(tmpl.config.discountRules);
+    }
+    if (!tmpl.config?.excelConfig) return;
+    const e = tmpl.config.excelConfig;
+    if (e.dataScope) setDataScope(e.dataScope);
+    if (e.includeVivan !== undefined) setIncludeVivan(e.includeVivan);
+    if (e.includeXpas !== undefined) setIncludeXpas(e.includeXpas);
+    if (e.includeAll !== undefined) setIncludeAll(e.includeAll);
+    if (e.primarySortCol) setPrimarySortCol(e.primarySortCol);
+    if (e.primarySortAsc !== undefined) setPrimarySortAsc(e.primarySortAsc);
+    if (e.secondarySortCol) setSecondarySortCol(e.secondarySortCol);
+    if (e.secondarySortAsc !== undefined) setSecondarySortAsc(e.secondarySortAsc);
+    if (e.useGoldenStyle !== undefined) setUseGoldenStyle(e.useGoldenStyle);
+    if (e.customSheetTitle !== undefined) setCustomSheetTitle(e.customSheetTitle);
+    if (e.xpasDiscountChoice) setXpasDiscountChoice(e.xpasDiscountChoice);
+    if (e.vivanDiscountChoice) setVivanDiscountChoice(e.vivanDiscountChoice);
+    if (e.showStock !== undefined) setIncludeStock(e.showStock);
+    setSelectedTemplateId(tmpl.id);
+  };
+
+  useEffect(() => {
+    if (initialTemplate) {
+      applyExcelTemplate(initialTemplate);
+    }
+  }, [initialTemplate]);
 
   // Active columns configured by the user, dynamically adjusted by includeStock toggle
   const activeColumns: ColumnDefinition[] = useMemo(() => {
@@ -136,7 +185,7 @@ export function MasterLcdExportModal({
         if (vivanDiscountChoice === 'NONE') {
           vivanExportList = toBasePrices(vivanItems);
         } else if (vivanDiscountChoice === 'ACTIVE_RULES') {
-          const activeVivanRules = discountRules.filter(r => 
+          const activeVivanRules = effectiveRules.filter(r => 
             (r.targetBrandLcd === 'VIVAN' || r.targetBrandLcd === 'ALL') && r.isActive
           );
           vivanExportList = applyDiscountsToItems(toBasePrices(vivanItems), activeVivanRules);
@@ -260,6 +309,33 @@ export function MasterLcdExportModal({
 
         {/* Content */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
+          {/* Quick Preset Template Loader */}
+          {savedTemplates.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <Bookmark className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="text-xs font-bold text-slate-800">Muat Preset Template:</span>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => {
+                    const tmpl = savedTemplates.find(t => t.id === e.target.value);
+                    if (tmpl) applyExcelTemplate(tmpl);
+                  }}
+                  className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 w-full sm:w-64"
+                >
+                  <option value="">-- Pilih Template Tersimpan ({savedTemplates.length}) --</option>
+                  {savedTemplates.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* File Name */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">

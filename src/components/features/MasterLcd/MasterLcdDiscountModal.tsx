@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { MasterLcdItem, DiscountRule, DiscountType } from './types';
 import { matchesDiscountRule } from './discountUtils';
+import { DiscountMultiSelectDropdown } from './DiscountMultiSelectDropdown';
 import { 
   Percent, 
   Plus, 
@@ -31,11 +32,11 @@ export function MasterLcdDiscountModal({
 }: MasterLcdDiscountModalProps) {
   const [localRules, setLocalRules] = useState<DiscountRule[]>(rules);
 
-  // Form State for new rule
-  const [targetBrandLcd, setTargetBrandLcd] = useState<string>('ALL');
-  const [targetBrandHp, setTargetBrandHp] = useState<string>('ALL');
-  const [targetStatusLcd, setTargetStatusLcd] = useState<string>('ALL');
-  const [targetOled, setTargetOled] = useState<string>('ALL');
+  // Form State for new rule (multi-select)
+  const [targetBrandLcdValues, setTargetBrandLcdValues] = useState<string[]>(['ALL']);
+  const [targetBrandHpValues, setTargetBrandHpValues] = useState<string[]>(['ALL']);
+  const [targetStatusLcdValues, setTargetStatusLcdValues] = useState<string[]>(['ALL']);
+  const [targetOledValues, setTargetOledValues] = useState<string[]>(['ALL']);
   const [discountType, setDiscountType] = useState<DiscountType>('percentage');
   const [discountValue, setDiscountValue] = useState<number>(5);
 
@@ -61,20 +62,37 @@ export function MasterLcdDiscountModal({
     return Array.from(set).filter(Boolean).sort();
   }, [items]);
 
+  // Joined string representations
+  const targetBrandHpStr = useMemo(() => {
+    return targetBrandHpValues.includes('ALL') || targetBrandHpValues.length === 0 ? 'ALL' : targetBrandHpValues.join(',');
+  }, [targetBrandHpValues]);
+
+  const targetStatusLcdStr = useMemo(() => {
+    return targetStatusLcdValues.includes('ALL') || targetStatusLcdValues.length === 0 ? 'ALL' : targetStatusLcdValues.join(',');
+  }, [targetStatusLcdValues]);
+
+  const targetOledStr = useMemo(() => {
+    return targetOledValues.includes('ALL') || targetOledValues.length === 0 ? 'ALL' : targetOledValues.join(',');
+  }, [targetOledValues]);
+
+  const targetBrandLcdStr = useMemo(() => {
+    return targetBrandLcdValues.includes('ALL') || targetBrandLcdValues.length === 0 ? 'ALL' : targetBrandLcdValues.join(',');
+  }, [targetBrandLcdValues]);
+
   // Preview how many items match the current form before adding
   const previewMatchCount = useMemo(() => {
     const mockRule: DiscountRule = {
       id: 'preview',
-      targetBrandLcd,
-      targetBrandHp,
-      targetStatusLcd,
-      targetOled,
+      targetBrandLcd: targetBrandLcdStr,
+      targetBrandHp: targetBrandHpStr,
+      targetStatusLcd: targetStatusLcdStr,
+      targetOled: targetOledStr,
       discountType,
       discountValue: Number(discountValue) || 0,
       isActive: true
     };
     return items.filter(item => matchesDiscountRule(item, mockRule)).length;
-  }, [items, targetBrandLcd, targetBrandHp, targetStatusLcd, targetOled, discountType, discountValue]);
+  }, [items, targetBrandLcdStr, targetBrandHpStr, targetStatusLcdStr, targetOledStr, discountType, discountValue]);
 
   if (!isOpen) return null;
 
@@ -87,10 +105,10 @@ export function MasterLcdDiscountModal({
 
     const newRule: DiscountRule = {
       id: `rule_${Date.now()}`,
-      targetBrandLcd,
-      targetBrandHp,
-      targetStatusLcd,
-      targetOled,
+      targetBrandLcd: targetBrandLcdStr,
+      targetBrandHp: targetBrandHpStr,
+      targetStatusLcd: targetStatusLcdStr,
+      targetOled: targetOledStr,
       discountType,
       discountValue: Number(discountValue),
       isActive: true
@@ -138,11 +156,12 @@ export function MasterLcdDiscountModal({
     onClose();
   };
 
-  const handleResetAll = () => {
-    if (window.confirm('Hapus semua aturan diskon? Harga akan kembali ke harga normal.')) {
-      setLocalRules([]);
-      onSaveRules([]);
-    }
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleConfirmResetAll = () => {
+    setLocalRules([]);
+    onSaveRules([]);
+    setShowResetConfirm(false);
   };
 
   return (
@@ -218,74 +237,43 @@ export function MasterLcdDiscountModal({
             {/* Criteria Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {/* Brand HP */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Brand HP:
-                </label>
-                <select
-                  value={targetBrandHp}
-                  onChange={(e) => setTargetBrandHp(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-semibold"
-                >
-                  <option value="ALL">Semua Brand HP</option>
-                  {uniqueBrandHp.map(hp => (
-                    <option key={hp} value={hp}>{hp}</option>
-                  ))}
-                </select>
-              </div>
+              <DiscountMultiSelectDropdown
+                label="Brand HP:"
+                allOptionLabel="Semua Brand HP"
+                options={uniqueBrandHp}
+                selectedValues={targetBrandHpValues}
+                onChange={setTargetBrandHpValues}
+              />
 
               {/* Status LCD */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Status LCD:
-                </label>
-                <select
-                  value={targetStatusLcd}
-                  onChange={(e) => setTargetStatusLcd(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-semibold"
-                >
-                  <option value="ALL">Semua Status</option>
-                  {uniqueStatusLcd.map(st => (
-                    <option key={st} value={st}>{st}</option>
-                  ))}
-                </select>
-              </div>
+              <DiscountMultiSelectDropdown
+                label="Status LCD:"
+                allOptionLabel="Semua Status"
+                options={uniqueStatusLcd}
+                selectedValues={targetStatusLcdValues}
+                onChange={setTargetStatusLcdValues}
+              />
 
               {/* OLED / Soft OLED */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  OLED / Soft OLED:
-                </label>
-                <select
-                  value={targetOled}
-                  onChange={(e) => setTargetOled(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-semibold"
-                >
-                  <option value="ALL">Semua Jenis</option>
-                  {uniqueOled.map(ol => (
-                    <option key={ol} value={ol}>{ol}</option>
-                  ))}
-                </select>
-              </div>
+              <DiscountMultiSelectDropdown
+                label="OLED / Soft OLED:"
+                allOptionLabel="Semua Jenis"
+                options={uniqueOled}
+                selectedValues={targetOledValues}
+                onChange={setTargetOledValues}
+              />
             </div>
 
             {/* Brand LCD & Discount Input */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
               {/* Brand LCD Target */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Brand LCD:
-                </label>
-                <select
-                  value={targetBrandLcd}
-                  onChange={(e) => setTargetBrandLcd(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-semibold"
-                >
-                  <option value="ALL">Semua (VIVAN & XPAS)</option>
-                  <option value="VIVAN">Hanya VIVAN</option>
-                  <option value="XPAS">Hanya XPAS</option>
-                </select>
-              </div>
+              <DiscountMultiSelectDropdown
+                label="Brand LCD:"
+                allOptionLabel="Semua (VIVAN & XPAS)"
+                options={['VIVAN', 'XPAS']}
+                selectedValues={targetBrandLcdValues}
+                onChange={setTargetBrandLcdValues}
+              />
 
               {/* Discount Type */}
               <div>
@@ -336,13 +324,33 @@ export function MasterLcdDiscountModal({
                 Daftar Aturan Diskon Aktif ({localRules.length}):
               </span>
               {localRules.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleResetAll}
-                  className="text-[11px] text-red-600 hover:underline flex items-center gap-1 font-semibold"
-                >
-                  <RotateCcw className="w-3 h-3" /> Hapus Semua Aturan
-                </button>
+                showResetConfirm ? (
+                  <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg animate-in fade-in zoom-in-95 duration-100">
+                    <span className="text-[11px] font-bold text-rose-800">Hapus semua aturan?</span>
+                    <button
+                      type="button"
+                      onClick={handleConfirmResetAll}
+                      className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] rounded transition-colors"
+                    >
+                      Ya, Hapus
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowResetConfirm(false)}
+                      className="px-2 py-0.5 bg-white border border-slate-300 text-slate-700 font-bold text-[10px] rounded hover:bg-slate-50 transition-colors"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowResetConfirm(true)}
+                    className="text-[11px] text-red-600 hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    <RotateCcw className="w-3 h-3" /> Hapus Semua Aturan
+                  </button>
+                )
               )}
             </div>
 

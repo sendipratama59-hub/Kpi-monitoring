@@ -72,3 +72,5 @@ export interface MasterLcdStats {
   totalStock: number;
   totalBrandsHp: number;
 }
+
+export type { MasterLcdTemplate, MasterLcdTemplateConfig } from './templateService';

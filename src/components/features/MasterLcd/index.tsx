@@ -8,6 +8,8 @@ import { MasterLcdExportModal } from './MasterLcdExportModal';
 import { MasterLcdPdfExportModal } from './MasterLcdPdfExportModal';
 import { MasterLcdDiscountModal } from './MasterLcdDiscountModal';
 import { MasterLcdStockUpdateModal } from './MasterLcdStockUpdateModal';
+import { MasterLcdTemplateModal } from './MasterLcdTemplateModal';
+import { MasterLcdTemplate, fetchTemplates } from './templateService';
 import { applyDiscountsToItems } from './discountUtils';
 import { 
   FileSpreadsheet, 
@@ -23,7 +25,8 @@ import {
   Sparkles,
   AlertTriangle,
   Percent,
-  Tag
+  Tag,
+  Bookmark
 } from 'lucide-react';
 
 const STORAGE_KEY_COLUMNS = 'master_lcd_visible_keys_v1';
@@ -42,7 +45,31 @@ export function MasterLcdView() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isPdfExportOpen, setIsPdfExportOpen] = useState(false);
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+
+  // Selected template for passing to export modals
+  const [selectedTemplateForPdf, setSelectedTemplateForPdf] = useState<MasterLcdTemplate | null>(null);
+  const [selectedTemplateForExcel, setSelectedTemplateForExcel] = useState<MasterLcdTemplate | null>(null);
+  const [templatesCount, setTemplatesCount] = useState<number>(0);
+
+  // Live filter state reported from table
+  const [currentFilterState, setCurrentFilterState] = useState({
+    selectedBrand: 'ALL',
+    selectedBrandHp: 'ALL',
+    searchTerm: '',
+    columnFilters: {} as Record<string, string[]>
+  });
+
+  // External filters to apply to table from template
+  const [externalFilters, setExternalFilters] = useState<{
+    selectedBrand?: string;
+    selectedBrandHp?: string;
+    searchTerm?: string;
+    columnFilters?: Record<string, string[]>;
+    key?: string | number;
+  } | undefined>(undefined);
 
   // Discount rules state
   const [discountRules, setDiscountRules] = useState<DiscountRule[]>(() => {
@@ -87,6 +114,86 @@ export function MasterLcdView() {
       localStorage.setItem(STORAGE_KEY_COLUMNS, JSON.stringify(keys));
     } catch (e) {
       console.warn('Failed to save columns preference:', e);
+    }
+  };
+
+  // Fetch count of templates saved in database / local
+  const refreshTemplatesCount = useCallback(async () => {
+    try {
+      const tmpls = await fetchTemplates();
+      setTemplatesCount(tmpls.length);
+    } catch (e) {
+      console.warn('Failed to fetch template count:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshTemplatesCount();
+  }, [refreshTemplatesCount]);
+
+  const handleApplyTemplate = (template: MasterLcdTemplate, openAction?: 'apply_only' | 'open_pdf' | 'open_excel') => {
+    // 1. Apply visible columns if configured
+    if (template.config.visibleKeys && template.config.visibleKeys.length > 0) {
+      handleVisibleKeysChange(template.config.visibleKeys);
+    }
+
+    // 2. Apply discount rules if configured
+    if (template.config.discountRules) {
+      handleSaveDiscountRules(template.config.discountRules);
+    }
+
+    // 3. Apply filters if configured
+    if (
+      template.config.selectedBrand !== undefined ||
+      template.config.selectedBrandHp !== undefined ||
+      template.config.searchTerm !== undefined ||
+      template.config.columnFilters !== undefined
+    ) {
+      const colFilters = { ...(template.config.columnFilters || {}) };
+
+      // Synchronize price column filters with discounts if applicable
+      const effectiveRules = template.config.discountRules || discountRules;
+      if (effectiveRules && effectiveRules.length > 0) {
+        const discountedItems = applyDiscountsToItems(items, effectiveRules);
+
+        (['harga_box', 'harga_pcs'] as const).forEach((priceKey) => {
+          if (colFilters[priceKey] && Array.isArray(colFilters[priceKey])) {
+            const allowedSet = new Set<string>(colFilters[priceKey]);
+            const origKey = priceKey === 'harga_box' ? 'original_harga_box' : 'original_harga_pcs';
+
+            discountedItems.forEach((item) => {
+              const origVal = (item as any)[origKey] !== undefined ? String((item as any)[origKey]).trim() : '';
+              const currentVal = (item as any)[priceKey] !== undefined ? String((item as any)[priceKey]).trim() : '';
+              if (origVal && allowedSet.has(origVal) && currentVal) {
+                allowedSet.add(currentVal);
+              }
+            });
+
+            colFilters[priceKey] = Array.from(allowedSet);
+          }
+        });
+      }
+
+      setExternalFilters({
+        selectedBrand: template.config.selectedBrand ?? 'ALL',
+        selectedBrandHp: template.config.selectedBrandHp ?? 'ALL',
+        searchTerm: template.config.searchTerm ?? '',
+        columnFilters: colFilters,
+        key: Date.now()
+      });
+    }
+
+    // 4. Handle open actions
+    if (openAction === 'open_pdf') {
+      setSelectedTemplateForPdf(template);
+      setIsPdfExportOpen(true);
+      setIsTemplateModalOpen(false);
+    } else if (openAction === 'open_excel') {
+      setSelectedTemplateForExcel(template);
+      setIsExportOpen(true);
+      setIsTemplateModalOpen(false);
+    } else {
+      setIsTemplateModalOpen(false);
     }
   };
 
@@ -220,11 +327,7 @@ export function MasterLcdView() {
     };
   }, [items]);
 
-  const handleDeleteAll = async () => {
-    if (!window.confirm('PERINGATAN: Apakah Anda yakin ingin menghapus SELURUH data Master LCD di database? Tindakan ini tidak dapat dibatalkan.')) {
-      return;
-    }
-
+  const confirmDeleteAll = async () => {
     setIsDeleting(true);
     try {
       const { error: delErr } = await supabase
@@ -234,8 +337,9 @@ export function MasterLcdView() {
 
       if (delErr) throw delErr;
       setItems([]);
+      setShowDeleteAllModal(false);
     } catch (err: any) {
-      alert(`Gagal menghapus data: ${err.message}`);
+      setError(`Gagal menghapus data: ${err.message}`);
     } finally {
       setIsDeleting(false);
     }
@@ -264,6 +368,16 @@ export function MasterLcdView() {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {/* Template & Preset Manager Button */}
+          <button
+            onClick={() => setIsTemplateModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-all"
+            title="Kelola & Terapkan Template Filter, Kolom, Diskon & Ekspor dari Database"
+          >
+            <Bookmark className="w-4 h-4" />
+            <span>Template Preset {templatesCount > 0 && `(${templatesCount})`}</span>
+          </button>
+
           {/* Header Visibility Toggle */}
           <button
             onClick={() => setIsToggleOpen(true)}
@@ -339,7 +453,7 @@ export function MasterLcdView() {
           {/* Delete All if has items */}
           {items.length > 0 && (
             <button
-              onClick={handleDeleteAll}
+              onClick={() => setShowDeleteAllModal(true)}
               disabled={isDeleting || isLoading}
               className="p-2 border border-red-200 bg-white hover:bg-red-50 text-red-600 rounded-lg shadow-2xs disabled:opacity-50"
               title="Hapus Semua Data"
@@ -462,6 +576,8 @@ export function MasterLcdView() {
         visibleKeys={visibleKeys}
         isLoading={isLoading}
         onFilteredItemsChange={setFilteredItems}
+        externalFilters={externalFilters}
+        onFilterStateChange={setCurrentFilterState}
       />
 
       {/* Modals */}
@@ -494,21 +610,29 @@ export function MasterLcdView() {
       {isExportOpen && (
         <MasterLcdExportModal
           isOpen={isExportOpen}
-          onClose={() => setIsExportOpen(false)}
+          onClose={() => {
+            setIsExportOpen(false);
+            setSelectedTemplateForExcel(null);
+          }}
           items={items}
           filteredItems={filteredItems}
           visibleKeys={visibleKeys}
           discountRules={discountRules}
+          initialTemplate={selectedTemplateForExcel}
         />
       )}
 
       {isPdfExportOpen && (
         <MasterLcdPdfExportModal
           isOpen={isPdfExportOpen}
-          onClose={() => setIsPdfExportOpen(false)}
+          onClose={() => {
+            setIsPdfExportOpen(false);
+            setSelectedTemplateForPdf(null);
+          }}
           items={items}
           filteredItems={filteredItems}
           discountRules={discountRules}
+          initialTemplate={selectedTemplateForPdf}
         />
       )}
 
@@ -520,6 +644,74 @@ export function MasterLcdView() {
           onSaveRules={handleSaveDiscountRules}
           items={items}
         />
+      )}
+
+      {isTemplateModalOpen && (
+        <MasterLcdTemplateModal
+          isOpen={isTemplateModalOpen}
+          onClose={() => setIsTemplateModalOpen(false)}
+          items={items}
+          currentState={{
+            selectedBrand: currentFilterState.selectedBrand,
+            selectedBrandHp: currentFilterState.selectedBrandHp,
+            searchTerm: currentFilterState.searchTerm,
+            columnFilters: currentFilterState.columnFilters,
+            visibleKeys,
+            discountRules,
+            pdfConfig: {
+              dataScope: filteredItems.length > 0 && filteredItems.length !== items.length ? 'filtered' : 'all',
+              splitMode: 'auto_threshold',
+              maxRowsPerPage: 50,
+              orientation: 'portrait',
+              includeStock: false
+            },
+            excelConfig: {
+              dataScope: 'all',
+              useGoldenStyle: true,
+              showStock: visibleKeys.includes('stock')
+            }
+          }}
+          onApplyTemplate={handleApplyTemplate}
+          onTemplatesChanged={refreshTemplatesCount}
+        />
+      )}
+
+      {/* Delete All Confirmation Modal */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl p-5 max-w-md w-full space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-2.5 bg-rose-50 rounded-xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Hapus Seluruh Master LCD?</h3>
+                <p className="text-xs text-slate-500">Tindakan ini tidak dapat dibatalkan.</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+              Apakah Anda yakin ingin menghapus seluruh <strong>{items.length.toLocaleString()}</strong> data Master LCD di database? Semua harga dan stok akan dikosongkan.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteAllModal(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteAll}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? 'Menghapus...' : 'Ya, Hapus Semua'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

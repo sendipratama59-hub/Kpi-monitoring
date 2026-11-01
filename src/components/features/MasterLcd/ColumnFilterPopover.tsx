@@ -70,7 +70,21 @@ export function ColumnFilterPopover({
       // All checked by default
       return new Set(distinctStats.map(s => s.value));
     }
-    return new Set(selectedValues);
+    const set = new Set(selectedValues);
+
+    // For price columns, also include discounted values if their corresponding original price is selected
+    if (column.key === 'harga_box' || column.key === 'harga_pcs') {
+      const origKey = column.key === 'harga_box' ? 'original_harga_box' : 'original_harga_pcs';
+      items.forEach(item => {
+        const currentVal = String((item as any)[column.key] ?? '').trim();
+        const origVal = (item as any)[origKey] !== undefined ? String((item as any)[origKey]).trim() : '';
+        if (origVal && set.has(origVal)) {
+          set.add(currentVal);
+        }
+      });
+    }
+
+    return set;
   });
 
   // Close on click outside

@@ -10,7 +10,8 @@ import {
   FileCheck,
   CheckCircle2,
   Filter,
-  Package
+  Package,
+  Bookmark
 } from 'lucide-react';
 import { MasterLcdItem, DiscountRule } from './types';
 import { 
@@ -19,6 +20,7 @@ import {
   generateMasterLcdPdf, 
   buildBrandPageGroups 
 } from './pdfExportGenerator';
+import { MasterLcdTemplate, fetchTemplates } from './templateService';
 
 interface MasterLcdPdfExportModalProps {
   isOpen: boolean;
@@ -26,6 +28,7 @@ interface MasterLcdPdfExportModalProps {
   items: MasterLcdItem[];
   filteredItems?: MasterLcdItem[];
   discountRules?: DiscountRule[];
+  initialTemplate?: MasterLcdTemplate | null;
 }
 
 export function MasterLcdPdfExportModal({
@@ -33,7 +36,8 @@ export function MasterLcdPdfExportModal({
   onClose,
   items,
   filteredItems,
-  discountRules = []
+  discountRules = [],
+  initialTemplate = null
 }: MasterLcdPdfExportModalProps) {
   // Check if header column filter is active in the table
   const hasFilterActive = Boolean(
@@ -60,9 +64,16 @@ export function MasterLcdPdfExportModal({
     return items;
   }, [dataScope, filteredItems, items]);
 
+  // Template discount rules override props if template is selected
+  const [activeTemplateRules, setActiveTemplateRules] = useState<DiscountRule[] | null>(
+    initialTemplate?.config?.discountRules || null
+  );
+
+  const effectiveRules = activeTemplateRules || discountRules;
+
   // Rules for selected brand
-  const xpasRules = useMemo(() => discountRules.filter(r => r.targetBrandLcd === 'XPAS'), [discountRules]);
-  const vivanRules = useMemo(() => discountRules.filter(r => r.targetBrandLcd === 'VIVAN'), [discountRules]);
+  const xpasRules = useMemo(() => effectiveRules.filter(r => r.targetBrandLcd === 'XPAS' || r.targetBrandLcd === 'ALL'), [effectiveRules]);
+  const vivanRules = useMemo(() => effectiveRules.filter(r => r.targetBrandLcd === 'VIVAN' || r.targetBrandLcd === 'ALL'), [effectiveRules]);
 
   // Discount selection (default to CURRENT if filtered so table discount is kept)
   const [discountChoice, setDiscountChoice] = useState<string>('CURRENT');
@@ -108,6 +119,39 @@ export function MasterLcdPdfExportModal({
 
   // Selected brands to include in PDF
   const [selectedBrands, setSelectedBrands] = useState<string[]>(availableBrands);
+
+  // Template loader state
+  const [savedTemplates, setSavedTemplates] = useState<MasterLcdTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+
+  useEffect(() => {
+    fetchTemplates().then(list => {
+      setSavedTemplates(list.filter(t => t.target_type === 'all' || t.target_type === 'pdf' || t.config?.pdfConfig));
+    });
+  }, []);
+
+  const applyPdfTemplate = (tmpl: MasterLcdTemplate) => {
+    if (tmpl.config?.discountRules) {
+      setActiveTemplateRules(tmpl.config.discountRules);
+    }
+    if (!tmpl.config?.pdfConfig) return;
+    const p = tmpl.config.pdfConfig;
+    if (p.dataScope) setDataScope(p.dataScope);
+    if (p.brandLcd) setBrandLcd(p.brandLcd);
+    if (p.splitMode) setSplitMode(p.splitMode);
+    if (p.maxRowsPerPage) setMaxRowsPerPage(p.maxRowsPerPage);
+    if (p.orientation) setOrientation(p.orientation);
+    if (p.includeStock !== undefined) setIncludeStock(p.includeStock);
+    if (p.discountChoice) setDiscountChoice(p.discountChoice);
+    if (p.selectedBrands && p.selectedBrands.length > 0) setSelectedBrands(p.selectedBrands);
+    setSelectedTemplateId(tmpl.id);
+  };
+
+  useEffect(() => {
+    if (initialTemplate) {
+      applyPdfTemplate(initialTemplate);
+    }
+  }, [initialTemplate]);
 
   // Sync selectedBrands if availableBrands shifts
   useEffect(() => {
@@ -210,6 +254,33 @@ export function MasterLcdPdfExportModal({
 
         {/* Content */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
+          {/* Quick Preset Template Loader */}
+          {savedTemplates.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <Bookmark className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span className="text-xs font-bold text-slate-800">Muat Preset Template:</span>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => {
+                    const tmpl = savedTemplates.find(t => t.id === e.target.value);
+                    if (tmpl) applyPdfTemplate(tmpl);
+                  }}
+                  className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-full sm:w-64"
+                >
+                  <option value="">-- Pilih Template Tersimpan ({savedTemplates.length}) --</option>
+                  {savedTemplates.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Data Scope Option (Filter Header Kolom) */}
           {hasFilterActive && (
             <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-3.5 space-y-2">

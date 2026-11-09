@@ -31,7 +31,7 @@ export function getShortNamaBarang(record: ReturRecordForPrint): string {
     }
   }
   raw = raw.replace(/^[-–—:\s]+/, '').trim();
-  return raw.length > 10 ? raw.slice(0, 10).trim() : raw;
+  return raw.length > 20 ? raw.slice(0, 20).trim() : raw;
 }
 
 interface ReturPrintModalProps {

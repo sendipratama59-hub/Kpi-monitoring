@@ -67,7 +67,7 @@ export function printBandung(records: ReturRecordForPrint[], copiesPerItem: numb
       const goodsCode = escapeHtml(rawGoodsCode);
       const kerusakan = escapeHtml(rawKerusakan);
 
-      // Extract short nama_barang without brand (max 10 chars) per user request: [Kode] - [Nama Barang 10 char]
+      // Extract short nama_barang without brand (max 20 chars) per user request: [Kode] - [Nama Barang 20 char]
       const shortItemName = getShortNamaBarang(record);
       const typeDisplay = shortItemName && rawGoodsCode !== '-'
         ? `${goodsCode} - ${escapeHtml(shortItemName)}`
@@ -76,10 +76,12 @@ export function printBandung(records: ReturRecordForPrint[], copiesPerItem: numb
       // Dynamic auto-scale for TYPE row
       let typeStyle = 'font-size: 7.2pt;';
       const typeLength = (rawGoodsCode + (shortItemName ? ' - ' + shortItemName : '')).length;
-      if (typeLength > 24) {
-        typeStyle = 'font-size: 6.2pt;';
-      } else if (typeLength > 19) {
-        typeStyle = 'font-size: 6.7pt;';
+      if (typeLength > 28) {
+        typeStyle = 'font-size: 5.8pt;';
+      } else if (typeLength > 23) {
+        typeStyle = 'font-size: 6.3pt;';
+      } else if (typeLength > 18) {
+        typeStyle = 'font-size: 6.8pt;';
       }
 
       return `
